@@ -82,12 +82,33 @@ model Institution {
   updatedAt DateTime @updatedAt
 
   users               User[]
+  departments         Department[]
   courses             Course[]
   questions           Question[]
   exams               Exam[]
   examAttempts        ExamAttempt[]
   auditLogs           AuditLog[]
   deviceRegistrations DeviceRegistration[]
+}
+
+/// Institution -> Department -> Course. Nullable on Course rather than
+/// required: Phase 1's seed/tests create courses directly with no
+/// department concept, and a required FK would mean a hand-written backfill
+/// migration plus editing every one of those call sites. createCourse() in
+/// courses.ts requires a real departmentId going forward — pre-existing
+/// courses with a null departmentId just don't show up under a department
+/// yet, they aren't in an error state.
+model Department {
+  id            String      @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  name          String
+  createdAt     DateTime    @default(now())
+
+  courses Course[]
+
+  @@unique([institutionId, name])
+  @@index([institutionId])
 }
 
 model User {
@@ -131,6 +152,9 @@ model Course {
   id            String      @id @default(cuid())
   institutionId String
   institution   Institution @relation(fields: [institutionId], references: [id])
+  /// Nullable — see the comment on Department above.
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
   code          String
   name          String
   academicYear  String
@@ -144,6 +168,7 @@ model Course {
 
   @@unique([institutionId, code, academicYear])
   @@index([institutionId])
+  @@index([departmentId])
 }
 
 model CourseFaculty {

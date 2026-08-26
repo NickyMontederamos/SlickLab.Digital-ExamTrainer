@@ -25,6 +25,7 @@ export async function AppHeader() {
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard", show: Boolean(role) },
+    { href: "/departments", label: "Departments", show: role ? can(role, "department", "create") : false },
     { href: "/users", label: "Users", show: role ? can(role, "user", "create") : false },
     // INSTITUTION_ADMIN now has institution-wide proctor authority too
     // (rbac.ts's exam_attempt "approve" — Milestone 6.5), so this reuses

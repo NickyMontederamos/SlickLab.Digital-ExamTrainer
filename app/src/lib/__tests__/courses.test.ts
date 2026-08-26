@@ -21,6 +21,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
   const runId = Math.random().toString(36).slice(2, 10);
   let institutionA: { id: string };
   let institutionB: { id: string };
+  let departmentA: { id: string };
   let facultyA: { id: string };
   let proctorA: { id: string };
   let studentA: { id: string };
@@ -33,6 +34,9 @@ describe("course management (INSTITUTION_ADMIN)", () => {
     });
     institutionB = await platform.institution.create({
       data: { name: `Tenant B ${runId}`, slug: `course-tenant-b-${runId}` },
+    });
+    departmentA = await platform.department.create({
+      data: { institutionId: institutionA.id, name: `Department A ${runId}` },
     });
     facultyA = await platform.user.create({
       data: { institutionId: institutionA.id, email: `course-faculty-${runId}@test.local`, name: "Faculty A", role: "FACULTY", passwordHash: "x" },
@@ -55,6 +59,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
     await platform.courseProctor.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.question.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.course.deleteMany({ where: { institutionId: { in: [institutionA.id, institutionB.id] } } });
+    await platform.department.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.user.deleteMany({ where: { institutionId: { in: [institutionA.id, institutionB.id] } } });
     await platform.institution.deleteMany({ where: { id: { in: [institutionA.id, institutionB.id] } } });
   });
@@ -64,6 +69,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
       code: "LAW999",
       name: "Test Course",
       academicYear: "2026-2027",
+      departmentId: departmentA.id,
     });
     expect(course.institutionId).toBe(institutionA.id);
   });
@@ -74,13 +80,19 @@ describe("course management (INSTITUTION_ADMIN)", () => {
         code: "LAW999",
         name: "Duplicate",
         academicYear: "2026-2027",
+        departmentId: departmentA.id,
       })
     ).rejects.toThrow(CourseCodeTakenError);
   });
 
   it("refuses course creation for roles without permission", async () => {
     await expect(
-      createCourse(institutionA.id, { role: "FACULTY" }, { code: "LAW998", name: "Nope", academicYear: "2026-2027" })
+      createCourse(institutionA.id, { role: "FACULTY" }, {
+        code: "LAW998",
+        name: "Nope",
+        academicYear: "2026-2027",
+        departmentId: departmentA.id,
+      })
     ).rejects.toThrow(ForbiddenError);
   });
 
@@ -159,6 +171,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
       code: "LAW777",
       name: "Empty Course",
       academicYear: "2026-2027",
+      departmentId: departmentA.id,
     });
 
     await deleteCourse(institutionA.id, { role: "INSTITUTION_ADMIN" }, empty.id);

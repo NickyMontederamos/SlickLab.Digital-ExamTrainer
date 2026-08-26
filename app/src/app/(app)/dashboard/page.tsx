@@ -1,15 +1,9 @@
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { can } from "@/lib/rbac";
-import { createCourse, CourseCodeTakenError, listCoursesForUser } from "@/lib/courses";
-import { Alert, Button, Card, EmptyState, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
+import { listCoursesForUser } from "@/lib/courses";
+import { Card, EmptyState, PageHeader, Section } from "@/components/ui";
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) {
     redirect("/login");
@@ -32,36 +26,9 @@ export default async function DashboardPage({
     redirect("/login");
   }
 
-  const { error } = await searchParams;
   const institutionId = session.user.institutionId;
-
   const courses = await listCoursesForUser(institutionId, session.user);
-
   const courseLinkPath = session.user.role === "STUDENT" ? "exams" : "";
-  const canCreateCourse = can(session.user.role, "course", "create");
-
-  async function createCourseAction(formData: FormData) {
-    "use server";
-    const authSession = await auth();
-    if (!authSession?.user?.institutionId) {
-      redirect("/login");
-    }
-
-    const code = String(formData.get("code") ?? "").trim();
-    const name = String(formData.get("name") ?? "").trim();
-    const academicYear = String(formData.get("academicYear") ?? "").trim();
-
-    try {
-      await createCourse(authSession.user.institutionId, authSession.user, { code, name, academicYear });
-    } catch (err) {
-      if (err instanceof CourseCodeTakenError) {
-        redirect(`/dashboard?error=${encodeURIComponent(err.message)}`);
-      }
-      throw err;
-    }
-
-    revalidatePath("/dashboard");
-  }
 
   const coursesLabel =
     session.user.role === "STUDENT" ? "My Courses" : session.user.role === "FACULTY" ? "Courses I Teach" : "Courses";
@@ -90,35 +57,6 @@ export default async function DashboardPage({
           </ul>
         )}
       </Section>
-
-      {canCreateCourse && (
-        <Section title="Create a course">
-          <Card>
-            {error && (
-              <div className="mb-3">
-                <Alert tone="error">{error}</Alert>
-              </div>
-            )}
-            <form action={createCourseAction} className="flex flex-col gap-3">
-              <label className={labelClassName}>
-                Code
-                <input name="code" required placeholder="LAW101" className={inputClassName} />
-              </label>
-              <label className={labelClassName}>
-                Name
-                <input name="name" required className={inputClassName} />
-              </label>
-              <label className={labelClassName}>
-                Academic year
-                <input name="academicYear" required placeholder="2026-2027" className={inputClassName} />
-              </label>
-              <Button type="submit" className="self-start">
-                Create course
-              </Button>
-            </form>
-          </Card>
-        </Section>
-      )}
     </main>
   );
 }

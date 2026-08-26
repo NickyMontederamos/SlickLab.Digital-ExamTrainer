@@ -93,6 +93,12 @@ async function main() {
     },
   });
 
+  const department = await db.department.upsert({
+    where: { institutionId_name: { institutionId: institution.id, name: "College of Law" } },
+    update: {},
+    create: { institutionId: institution.id, name: "College of Law" },
+  });
+
   const course = await db.course.upsert({
     where: {
       institutionId_code_academicYear: {
@@ -101,9 +107,10 @@ async function main() {
         academicYear: "2026-2027",
       },
     },
-    update: {},
+    update: { departmentId: department.id },
     create: {
       institutionId: institution.id,
+      departmentId: department.id,
       code: "LAW101",
       name: "Legal Method and Legal Writing",
       academicYear: "2026-2027",

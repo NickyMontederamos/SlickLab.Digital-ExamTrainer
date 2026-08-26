@@ -11,6 +11,7 @@ import type { Role } from "@prisma/client";
 export type Resource =
   | "institution"
   | "user"
+  | "department"
   | "course"
   | "question"
   | "exam"
@@ -26,6 +27,7 @@ const PERMISSIONS: PermissionMatrix = {
   SUPER_ADMIN: {
     institution: ["create", "read", "update", "delete"],
     user: ["create", "read", "update", "delete"],
+    department: ["create", "read", "update", "delete"],
     course: ["create", "read", "update", "delete"],
     question: ["create", "read", "update", "delete"],
     exam: ["create", "read", "update", "delete", "publish"],
@@ -46,6 +48,7 @@ const PERMISSIONS: PermissionMatrix = {
   INSTITUTION_ADMIN: {
     institution: ["read", "update"],
     user: ["create", "read", "update", "delete"],
+    department: ["create", "read", "update", "delete"],
     course: ["create", "read", "update", "delete"],
     question: ["create", "read", "update", "delete"],
     exam: ["create", "read", "update", "delete", "publish"],
@@ -60,6 +63,7 @@ const PERMISSIONS: PermissionMatrix = {
     audit_log: ["read"],
   },
   FACULTY: {
+    department: ["read"],
     course: ["read"],
     question: ["create", "read", "update", "delete"],
     exam: ["create", "read", "update", "delete", "publish"],
@@ -67,10 +71,12 @@ const PERMISSIONS: PermissionMatrix = {
     grade: ["read", "grade"],
   },
   PROCTOR: {
+    department: ["read"],
     course: ["read"],
     exam_attempt: ["read", "approve"],
   },
   STUDENT: {
+    department: ["read"],
     course: ["read"],
     exam: ["read"],
     exam_attempt: ["create", "read", "take"],

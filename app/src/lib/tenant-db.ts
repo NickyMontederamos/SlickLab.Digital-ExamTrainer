@@ -8,6 +8,7 @@ import { prisma } from "./prisma";
  */
 const TENANT_SCOPED_MODELS = new Set([
   "User",
+  "Department",
   "Course",
   "CourseFaculty",
   "CourseProctor",

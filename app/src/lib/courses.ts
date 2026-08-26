@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { assertCan } from "./rbac";
 import { forTenant } from "./tenant-db";
+import { DepartmentNotFoundError } from "./departments";
 
 export class CourseCodeTakenError extends Error {
   constructor(code: string, academicYear: string) {
@@ -101,19 +102,29 @@ export interface CreateCourseInput {
   code: string;
   name: string;
   academicYear: string;
+  departmentId: string;
 }
 
 export async function createCourse(institutionId: string, actor: { role: Role }, input: CreateCourseInput) {
   assertCan(actor.role, "course", "create");
 
   const db = forTenant(institutionId);
+  const department = await db.department.findFirst({ where: { id: input.departmentId } });
+  if (!department) {
+    throw new DepartmentNotFoundError(input.departmentId);
+  }
   const existing = await db.course.findFirst({ where: { code: input.code, academicYear: input.academicYear } });
   if (existing) {
     throw new CourseCodeTakenError(input.code, input.academicYear);
   }
 
   return db.course.create({
-    data: { code: input.code, name: input.name, academicYear: input.academicYear } as never,
+    data: {
+      code: input.code,
+      name: input.name,
+      academicYear: input.academicYear,
+      departmentId: input.departmentId,
+    } as never,
   });
 }
 
