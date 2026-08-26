@@ -4,7 +4,8 @@ import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { DepartmentNotFoundError, getDepartmentWithCourses } from "@/lib/departments";
 import { createCourse, CourseCodeTakenError } from "@/lib/courses";
-import { Alert, Button, Card, EmptyState, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
+import { PortalTable, type PortalTableRow } from "@/components/PortalTable";
+import { Alert, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
 
 export default async function DepartmentCoursesPage({
   params,
@@ -57,58 +58,63 @@ export default async function DepartmentCoursesPage({
     revalidatePath(`/departments/${departmentId}`);
   }
 
+  const rows: PortalTableRow[] = department.courses.map((course) => ({
+    id: course.id,
+    label: `${course.code} — ${course.name}`,
+    href: `/courses/${course.id}`,
+    meta: course.academicYear,
+  }));
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6">
-      <PageHeader backHref="/departments" backLabel="Departments" title="My Courses" subtitle={department.name} />
+      <div>
+        <nav className="mb-1 text-xs text-slate-500 dark:text-slate-400">
+          <a href="/departments" className="hover:text-brand-primary hover:underline">
+            {department.name}
+          </a>{" "}
+          / My Courses
+        </nav>
+        <PageHeader
+          title="My Courses"
+          actions={canCreateCourse && <LinkButton href="#create-course" variant="success">Create A Course</LinkButton>}
+        />
+      </div>
 
-      <Section title={`Courses (${department.courses.length})`}>
-        {department.courses.length === 0 ? (
-          <EmptyState>No courses in this department yet.</EmptyState>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {department.courses.map((course) => (
-              <li key={course.id}>
-                <a href={`/courses/${course.id}`}>
-                  <Card interactive className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {course.code} — {course.name}
-                    </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">{course.academicYear}</span>
-                  </Card>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {department.courses.length === 0 ? (
+        <EmptyState>No courses in this department yet.</EmptyState>
+      ) : (
+        <PortalTable columnLabel="Course Name" searchPlaceholder="Find Courses" totalLabel="Total Courses" rows={rows} />
+      )}
 
       {canCreateCourse && (
-        <Section title="Create a course">
-          <Card>
-            {error && (
-              <div className="mb-3">
-                <Alert tone="error">{error}</Alert>
-              </div>
-            )}
-            <form action={createCourseAction} className="flex flex-col gap-3">
-              <label className={labelClassName}>
-                Code
-                <input name="code" required placeholder="LAW101" className={inputClassName} />
-              </label>
-              <label className={labelClassName}>
-                Name
-                <input name="name" required className={inputClassName} />
-              </label>
-              <label className={labelClassName}>
-                Academic year
-                <input name="academicYear" required placeholder="2026-2027" className={inputClassName} />
-              </label>
-              <Button type="submit" className="self-start">
-                Create course
-              </Button>
-            </form>
-          </Card>
-        </Section>
+        <div id="create-course">
+          <Section title="Create a course">
+            <Card>
+              {error && (
+                <div className="mb-3">
+                  <Alert tone="error">{error}</Alert>
+                </div>
+              )}
+              <form action={createCourseAction} className="flex flex-col gap-3">
+                <label className={labelClassName}>
+                  Code
+                  <input name="code" required placeholder="LAW101" className={inputClassName} />
+                </label>
+                <label className={labelClassName}>
+                  Name
+                  <input name="name" required className={inputClassName} />
+                </label>
+                <label className={labelClassName}>
+                  Academic year
+                  <input name="academicYear" required placeholder="2026-2027" className={inputClassName} />
+                </label>
+                <Button type="submit" variant="success" className="self-start">
+                  Create course
+                </Button>
+              </form>
+            </Card>
+          </Section>
+        </div>
       )}
     </main>
   );

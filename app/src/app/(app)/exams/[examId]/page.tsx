@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { ExamEntryGate } from "@/components/ExamEntryGate";
 import { ExamDownloadGate } from "@/components/ExamDownloadGate";
+import { AssessmentPasswordField, UniversalResumeCodeField } from "@/components/PostAssessmentSettingsFields";
 import {
   addExamQuestion,
   addExamQuestions,
@@ -450,30 +451,23 @@ export default async function ExamBuilderPage({
       )}
 
       {canEdit && version && (
-        <Section
-          title="Post Assessment Settings"
-          description="Matches the real product's posting screen. Ping & Release and the email reminder toggles are stored but inert — this app has no email infrastructure to send a real reminder, and there's no meaningful offline/online distinction in a web app that already requires network to load at all."
-        >
-          <Card>
-            <form action={updatePostSettingsAction} className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
+          <div className="border-b-4 border-slate-200 pb-2 dark:border-slate-800">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-brand-primary">Post Assessment Settings</h2>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Ping &amp; Release and the email reminder toggles are stored but inert — this app has no email
+            infrastructure to send a real reminder, and there&apos;s no meaningful offline/online distinction in a
+            web app that already requires network to load at all.
+          </p>
+
+          <form action={updatePostSettingsAction} className="flex flex-col gap-5">
+            <AssessmentPasswordField initialValue={version.assessmentPassword ?? ""} />
+            <UniversalResumeCodeField initialValue={version.universalResumeCode ?? ""} />
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className={labelClassName}>
-                Assessment password (optional — any non-empty value unlocks if left blank)
-                <input
-                  name="assessmentPassword"
-                  defaultValue={version.assessmentPassword ?? ""}
-                  className={inputClassName}
-                />
-              </label>
-              <label className={labelClassName}>
-                Universal Resume Code (optional — lets a student self-resume a paused attempt)
-                <input
-                  name="universalResumeCode"
-                  defaultValue={version.universalResumeCode ?? ""}
-                  className={inputClassName}
-                />
-              </label>
-              <label className={labelClassName}>
-                Download start (optional)
+                Download Start
                 <input
                   name="downloadStartAt"
                   type="datetime-local"
@@ -482,7 +476,7 @@ export default async function ExamBuilderPage({
                 />
               </label>
               <label className={labelClassName}>
-                Download end (optional)
+                Download End
                 <input
                   name="downloadEndAt"
                   type="datetime-local"
@@ -490,18 +484,22 @@ export default async function ExamBuilderPage({
                   className={inputClassName}
                 />
               </label>
+            </div>
+
+            <label className={`${labelClassName} max-w-xs`}>
+              Maximum Downloads
+              <input
+                name="maxDownloads"
+                type="number"
+                min={1}
+                defaultValue={version.maxDownloads ?? ""}
+                className={inputClassName}
+              />
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className={labelClassName}>
-                Maximum downloads (optional)
-                <input
-                  name="maxDownloads"
-                  type="number"
-                  min={1}
-                  defaultValue={version.maxDownloads ?? ""}
-                  className={inputClassName}
-                />
-              </label>
-              <label className={labelClassName}>
-                Remote assessment deletion (optional)
+                Remote Assessment Deletion (optional)
                 <input
                   name="remoteDeletionAt"
                   type="datetime-local"
@@ -509,10 +507,13 @@ export default async function ExamBuilderPage({
                   className={inputClassName}
                 />
               </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <label className="flex items-center gap-2 self-end pb-2.5 text-sm text-slate-700 dark:text-slate-300">
                 <input type="checkbox" name="pingAndRelease" defaultChecked={version.pingAndRelease} />
-                Ping &amp; Release
+                Ping &amp; Release (optional)
               </label>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input type="checkbox" name="sendDownloadEndReminder" defaultChecked={version.sendDownloadEndReminder} />
                 Send a reminder for the download end
@@ -525,12 +526,13 @@ export default async function ExamBuilderPage({
                 />
                 Send a reminder for the upload deadline
               </label>
-              <Button type="submit" variant="secondary" className="self-start">
-                Save post assessment settings
-              </Button>
-            </form>
-          </Card>
-        </Section>
+            </div>
+
+            <Button type="submit" variant="success" className="self-start">
+              Save Post Assessment Settings
+            </Button>
+          </form>
+        </div>
       )}
 
       <Section

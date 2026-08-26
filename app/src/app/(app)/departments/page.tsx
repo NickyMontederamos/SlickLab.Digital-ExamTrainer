@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { createDepartment, DepartmentNameTakenError, listDepartments } from "@/lib/departments";
-import { Alert, Badge, Button, Card, EmptyState, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
+import { PortalTable, type PortalTableRow } from "@/components/PortalTable";
+import { Alert, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
 
 export default async function DepartmentsPage({
   searchParams,
@@ -42,50 +43,49 @@ export default async function DepartmentsPage({
     revalidatePath("/departments");
   }
 
+  const rows: PortalTableRow[] = departments.map((department) => ({
+    id: department.id,
+    label: department.name,
+    href: `/departments/${department.id}`,
+    meta: `${department._count.courses} course${department._count.courses === 1 ? "" : "s"}`,
+  }));
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6">
-      <PageHeader title="My Departments" />
+      <PageHeader title="My Departments" actions={canCreate && <LinkButton href="#create-department" variant="success">Create Department</LinkButton>} />
 
-      <Section title={`Departments (${departments.length})`}>
-        {departments.length === 0 ? (
-          <EmptyState>No departments yet.</EmptyState>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {departments.map((department) => (
-              <li key={department.id}>
-                <a href={`/departments/${department.id}`}>
-                  <Card interactive className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{department.name}</span>
-                    <Badge tone="gray">
-                      {department._count.courses} course{department._count.courses === 1 ? "" : "s"}
-                    </Badge>
-                  </Card>
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      {departments.length === 0 ? (
+        <EmptyState>No departments yet.</EmptyState>
+      ) : (
+        <PortalTable
+          columnLabel="Department Name"
+          searchPlaceholder="Find Departments"
+          totalLabel="Total Departments"
+          rows={rows}
+        />
+      )}
 
       {canCreate && (
-        <Section title="Create a department">
-          <Card>
-            {error && (
-              <div className="mb-3">
-                <Alert tone="error">{error}</Alert>
-              </div>
-            )}
-            <form action={createDepartmentAction} className="flex flex-col gap-3">
-              <label className={labelClassName}>
-                Name
-                <input name="name" required placeholder="College of Law" className={inputClassName} />
-              </label>
-              <Button type="submit" className="self-start">
-                Create department
-              </Button>
-            </form>
-          </Card>
-        </Section>
+        <div id="create-department">
+          <Section title="Create a department">
+            <Card>
+              {error && (
+                <div className="mb-3">
+                  <Alert tone="error">{error}</Alert>
+                </div>
+              )}
+              <form action={createDepartmentAction} className="flex flex-col gap-3">
+                <label className={labelClassName}>
+                  Name
+                  <input name="name" required placeholder="College of Law" className={inputClassName} />
+                </label>
+                <Button type="submit" variant="success" className="self-start">
+                  Create department
+                </Button>
+              </form>
+            </Card>
+          </Section>
+        </div>
       )}
     </main>
   );
