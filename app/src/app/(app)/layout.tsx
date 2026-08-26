@@ -1,6 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { AppHeader } from "@/components/AppHeader";
 import { getDemoInstitutionBranding } from "@/lib/branding";
+import { hasRegisteredDevice } from "@/lib/device-registration";
 
 /**
  * Shared chrome for every authenticated route (dashboard, courses, exams,
@@ -28,6 +31,19 @@ import { getDemoInstitutionBranding } from "@/lib/branding";
 export const dynamic = "force-dynamic";
 
 export default async function AppGroupLayout({ children }: { children: ReactNode }) {
+  // Every (app) route requires a registered device for STUDENT — the
+  // install/register ceremony (/register-device) is the very first thing a
+  // new student does, before reaching any real course content, mirroring
+  // Examplify's own device-registration flow. FACULTY/PROCTOR/INSTITUTION_ADMIN
+  // never install anything and are never gated here.
+  const session = await auth();
+  if (session?.user?.role === "STUDENT" && session.user.institutionId) {
+    const registered = await hasRegisteredDevice(session.user.institutionId, session.user);
+    if (!registered) {
+      redirect("/register-device");
+    }
+  }
+
   const branding = await getDemoInstitutionBranding();
 
   const brandStyle: CSSProperties & Record<string, string> = {};
