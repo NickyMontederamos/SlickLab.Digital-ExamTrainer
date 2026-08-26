@@ -38,6 +38,26 @@ export async function listAttemptsForExam(institutionId: string, actor: { role: 
   });
 }
 
+/**
+ * Class-average percent across a set of GRADED attempts, each carrying its
+ * own answers with pointsAwarded. Shared by getCourseExamSummaries below
+ * and benchmarks.ts's combined report, so the two never drift on how
+ * "average score" is defined.
+ */
+export function averageScorePercent(
+  gradedAttempts: { answers: { pointsAwarded: number | null }[] }[],
+  maxPoints: number
+): number | null {
+  if (gradedAttempts.length === 0 || maxPoints <= 0) {
+    return null;
+  }
+  const totalScored = gradedAttempts.reduce(
+    (sum, a) => sum + a.answers.reduce((s, ans) => s + (ans.pointsAwarded ?? 0), 0),
+    0
+  );
+  return (totalScored / (gradedAttempts.length * maxPoints)) * 100;
+}
+
 export interface CourseExamSummary {
   examId: string;
   title: string;
@@ -93,13 +113,6 @@ export async function getCourseExamSummaries(
     const pending = attempts.filter((a) => a.status === "SUBMITTED");
     const terminated = attempts.filter((a) => a.status === "TERMINATED");
 
-    const averageScorePercent =
-      graded.length > 0 && maxPoints > 0
-        ? (graded.reduce((sum, a) => sum + a.answers.reduce((s, ans) => s + (ans.pointsAwarded ?? 0), 0), 0) /
-            (graded.length * maxPoints)) *
-          100
-        : null;
-
     return {
       examId: exam.id,
       title: exam.title,
@@ -108,7 +121,7 @@ export async function getCourseExamSummaries(
       pendingCount: pending.length,
       gradedCount: graded.length,
       terminatedCount: terminated.length,
-      averageScorePercent,
+      averageScorePercent: averageScorePercent(graded, maxPoints),
     };
   });
 }

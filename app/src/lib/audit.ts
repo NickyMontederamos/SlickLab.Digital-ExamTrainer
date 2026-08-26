@@ -31,6 +31,7 @@ export const AUDIT_ACTIONS = {
   examUpdate: "exam.update",
   examPublish: "exam.publish",
   examDelete: "exam.delete",
+  examDuplicate: "exam.duplicate",
 
   gradeAssign: "grade.assign",
 

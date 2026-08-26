@@ -33,6 +33,17 @@ enum ExamStatus {
   ARCHIVED
 }
 
+/// STANDARD is every exam faculty write themselves. BENCHMARK exams live in
+/// a Course.isBenchmarkBank course and are never taken directly — they're
+/// duplicated into a live course as a STANDARD exam via LinkedAssessment
+/// (see the comment on that model). Only a Course.isBenchmarkBank course can
+/// contain a BENCHMARK exam — enforced server-side in exams.ts's
+/// createExam(), not just hidden in the UI.
+enum ExamKind {
+  STANDARD
+  BENCHMARK
+}
+
 enum AttemptStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -86,6 +97,7 @@ model Institution {
   courses             Course[]
   questions           Question[]
   exams               Exam[]
+  linkedAssessments   LinkedAssessment[]
   examAttempts        ExamAttempt[]
   auditLogs           AuditLog[]
   deviceRegistrations DeviceRegistration[]
@@ -139,6 +151,7 @@ model User {
   enrollments         Enrollment[]
   questionsCreated    Question[]        @relation("QuestionCreatedBy")
   examsCreated        Exam[]            @relation("ExamCreatedBy")
+  linkedAssessmentsCreated LinkedAssessment[] @relation("LinkedAssessmentCreatedBy")
   examAttempts        ExamAttempt[]
   answersGraded       ExamAnswer[]      @relation("AnswerGradedBy")
   submissionsVerified Submission[]      @relation("SubmissionVerifiedBy")
@@ -158,6 +171,12 @@ model Course {
   code          String
   name          String
   academicYear  String
+  /// Marks this course as a shared institutional catalog of Benchmark
+  /// Assessments (see ExamKind) rather than a live teaching course.
+  /// Faculty duplicate/link exams OUT of a benchmark-bank course into their
+  /// own live course; a benchmark-bank course itself is never where
+  /// students take an exam.
+  isBenchmarkBank Boolean     @default(false)
   createdAt     DateTime    @default(now())
 
   faculty     CourseFaculty[]
@@ -262,14 +281,40 @@ model Exam {
   course        Course      @relation(fields: [courseId], references: [id])
   title         String
   status        ExamStatus  @default(DRAFT)
+  kind          ExamKind    @default(STANDARD)
   createdById   String
   createdBy     User        @relation("ExamCreatedBy", fields: [createdById], references: [id])
   createdAt     DateTime    @default(now())
 
   versions ExamVersion[]
+  linkedAsSource LinkedAssessment[] @relation("LinkedAssessmentSource")
+  linkedAsCopy   LinkedAssessment?  @relation("LinkedAssessmentLinked")
 
   @@index([institutionId])
   @@index([courseId])
+}
+
+/// Records that `linkedExam` is a duplicated copy of `sourceExam` (a
+/// BENCHMARK exam), created by duplicateBenchmarkExam() in benchmarks.ts.
+/// Drives two things: the combined-report query (every linkedExam sharing
+/// a sourceExamId is one "posting" of the same benchmark), and the
+/// question-lock check in exams.ts (a linkedExam's questions can never be
+/// added/removed, matching the real product's "cannot edit questions on
+/// existing or new assessment").
+model LinkedAssessment {
+  id            String      @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  sourceExamId  String
+  sourceExam    Exam        @relation("LinkedAssessmentSource", fields: [sourceExamId], references: [id])
+  linkedExamId  String      @unique
+  linkedExam    Exam        @relation("LinkedAssessmentLinked", fields: [linkedExamId], references: [id])
+  createdById   String
+  createdBy     User        @relation("LinkedAssessmentCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@index([institutionId])
+  @@index([sourceExamId])
 }
 
 /// Immutable once published (master prompt §11: "Do not silently mutate the

@@ -49,6 +49,26 @@ export class ExamQuestionNotFoundError extends Error {
   }
 }
 
+/**
+ * A linked (duplicated-from-benchmark) exam can never have its questions
+ * edited — matches the real product's "Cannot edit questions on existing
+ * or new assessment" for a Linked Assessment. Enforced here, server-side,
+ * not just a hidden Add/Remove button in the UI.
+ */
+export class LinkedAssessmentQuestionsLockedError extends Error {
+  constructor(examId: string) {
+    super(`Exam ${examId} is a linked benchmark assessment — its questions cannot be edited`);
+    this.name = "LinkedAssessmentQuestionsLockedError";
+  }
+}
+
+async function assertQuestionsNotLocked(db: ReturnType<typeof forTenant>, examId: string) {
+  const linked = await db.linkedAssessment.findFirst({ where: { linkedExamId: examId } });
+  if (linked) {
+    throw new LinkedAssessmentQuestionsLockedError(examId);
+  }
+}
+
 export interface CreateExamInput {
   courseId: string;
   title: string;
@@ -60,6 +80,8 @@ export interface CreateExamInput {
   /** Booking window shown to students (see docs/PITCH_ROADMAP.md's booking flow) — optional; a version with neither set has no advertised window. */
   availableFrom?: Date;
   availableUntil?: Date;
+  /** Only takes effect inside a Course.isBenchmarkBank course — see the server-side clamp below. */
+  kind?: "STANDARD" | "BENCHMARK";
 }
 
 /** Creates an exam and its first (DRAFT, active) version atomically. */
@@ -74,6 +96,10 @@ export async function createExam(institutionId: string, actor: { id: string; rol
   }
   await assertFacultyAssignedToCourse(institutionId, actor, input.courseId);
 
+  // Server-side clamp, not just a UI gate: a non-benchmark-bank course can
+  // never end up with a BENCHMARK exam even via a forged request.
+  const kind = course.isBenchmarkBank ? (input.kind ?? "STANDARD") : "STANDARD";
+
   return db.$transaction(async (tx) => {
     const exam = await tx.exam.create({
       // institutionId omitted deliberately — see questions.ts for why.
@@ -81,6 +107,7 @@ export async function createExam(institutionId: string, actor: { id: string; rol
         courseId: input.courseId,
         title: input.title,
         status: "DRAFT",
+        kind,
         createdById: actor.id,
       } as never,
     });
@@ -140,6 +167,12 @@ export async function getExam(institutionId: string, actor: { id: string; role: 
           },
         },
       },
+      // linkedAsCopy set = this exam IS a duplicated benchmark copy (its
+      // questions are locked, see LinkedAssessmentQuestionsLockedError).
+      // linkedAsSource populated = this exam IS a benchmark source with at
+      // least one course posting from it (worth a Combined Report link).
+      linkedAsCopy: true,
+      linkedAsSource: { select: { id: true } },
     },
   });
   if (!exam) {
@@ -174,6 +207,7 @@ export async function addExamQuestion(
   if (exam.status !== "DRAFT") {
     throw new ExamNotEditableError(input.examId);
   }
+  await assertQuestionsNotLocked(db, input.examId);
   const activeVersion = exam.versions[0];
   if (!activeVersion) {
     throw new ExamNotEditableError(input.examId);
@@ -229,6 +263,7 @@ export async function addExamQuestions(institutionId: string, actor: { id: strin
   if (exam.status !== "DRAFT") {
     throw new ExamNotEditableError(examId);
   }
+  await assertQuestionsNotLocked(db, examId);
   const activeVersion = exam.versions[0];
   if (!activeVersion) {
     throw new ExamNotEditableError(examId);
@@ -328,6 +363,7 @@ export async function removeExamQuestion(institutionId: string, actor: { id: str
   if (exam.status !== "DRAFT") {
     throw new ExamNotEditableError(examId);
   }
+  await assertQuestionsNotLocked(db, examId);
   const activeVersion = exam.versions[0];
   if (!activeVersion) {
     throw new ExamNotEditableError(examId);

@@ -3,13 +3,16 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { createExam, listExamsForCourse } from "@/lib/exams";
+import { duplicateBenchmarkExam, listBenchmarkExamsForInstitution } from "@/lib/benchmarks";
 import { forTenant } from "@/lib/tenant-db";
-import { Badge, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
 
 export default async function CourseExamsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ courseId: string }>;
+  searchParams: Promise<{ duplicateError?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.institutionId) {
@@ -17,6 +20,7 @@ export default async function CourseExamsPage({
   }
 
   const { courseId } = await params;
+  const { duplicateError } = await searchParams;
   const institutionId = session.user.institutionId;
 
   const course = await forTenant(institutionId).course.findFirst({ where: { id: courseId } });
@@ -28,6 +32,8 @@ export default async function CourseExamsPage({
     ? await listExamsForCourse(institutionId, session.user, courseId)
     : [];
   const canCreate = can(session.user.role, "exam", "create");
+  const benchmarkExams =
+    canCreate && !course.isBenchmarkBank ? await listBenchmarkExamsForInstitution(institutionId, session.user) : [];
 
   async function createExamAction(formData: FormData) {
     "use server";
@@ -43,6 +49,7 @@ export default async function CourseExamsPage({
     const timeLimitMinutes = Number(formData.get("timeLimitMinutes") ?? 60);
     const availableFromRaw = String(formData.get("availableFrom") ?? "");
     const availableUntilRaw = String(formData.get("availableUntil") ?? "");
+    const kindRaw = String(formData.get("kind") ?? "STANDARD");
 
     await createExam(actorInstitutionId, { id: actorId, role: actorRole }, {
       courseId,
@@ -50,9 +57,33 @@ export default async function CourseExamsPage({
       timeLimitMinutes,
       availableFrom: availableFromRaw ? new Date(availableFromRaw) : undefined,
       availableUntil: availableUntilRaw ? new Date(availableUntilRaw) : undefined,
+      kind: kindRaw === "BENCHMARK" ? "BENCHMARK" : "STANDARD",
     });
 
     revalidatePath(`/courses/${courseId}/exams`);
+  }
+
+  async function duplicateBenchmarkAction(formData: FormData) {
+    "use server";
+    const authSession = await auth();
+    const actorId = authSession?.user?.id;
+    const actorInstitutionId = authSession?.user?.institutionId;
+    const actorRole = authSession?.user?.role;
+    if (!actorId || !actorInstitutionId || !actorRole) {
+      redirect("/login");
+    }
+
+    const sourceExamId = String(formData.get("sourceExamId") ?? "");
+    if (!sourceExamId) {
+      redirect(`/courses/${courseId}/exams?duplicateError=${encodeURIComponent("Pick a benchmark assessment first")}`);
+    }
+
+    const linked = await duplicateBenchmarkExam(actorInstitutionId, { id: actorId, role: actorRole }, {
+      sourceExamId,
+      targetCourseId: courseId,
+    });
+
+    redirect(`/exams/${linked.id}`);
   }
 
   return (
@@ -102,6 +133,19 @@ export default async function CourseExamsPage({
         <Section title="Create an exam">
           <Card>
             <form action={createExamAction} className="flex flex-col gap-3">
+              {course.isBenchmarkBank && (
+                <fieldset className="flex flex-col gap-1.5">
+                  <legend className={labelClassName}>Assessment type</legend>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="radio" name="kind" value="STANDARD" defaultChecked />
+                    Question bank
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="radio" name="kind" value="BENCHMARK" />
+                    Benchmark Assessment
+                  </label>
+                </fieldset>
+              )}
               <label className={labelClassName}>
                 Title
                 <input name="title" required className={inputClassName} />
@@ -122,6 +166,40 @@ export default async function CourseExamsPage({
                 Create exam (draft)
               </Button>
             </form>
+          </Card>
+        </Section>
+      )}
+
+      {canCreate && !course.isBenchmarkBank && (
+        <Section
+          title="Post from Benchmark"
+          description="Duplicate a published Benchmark Assessment from a benchmark-bank course into this one. The copy shares the same questions and can't have questions added or removed."
+        >
+          <Card>
+            {duplicateError && (
+              <div className="mb-3">
+                <Alert tone="error">{duplicateError}</Alert>
+              </div>
+            )}
+            {benchmarkExams.length === 0 ? (
+              <EmptyState>No published Benchmark Assessments are available to post yet.</EmptyState>
+            ) : (
+              <form action={duplicateBenchmarkAction} className="flex flex-col gap-3">
+                <label className={labelClassName}>
+                  Benchmark Assessment
+                  <select name="sourceExamId" required className={inputClassName}>
+                    {benchmarkExams.map((exam) => (
+                      <option key={exam.id} value={exam.id}>
+                        {exam.title} · {exam.course.name} · {exam.versions[0]?.examQuestions.length ?? 0} question(s)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button type="submit" className="self-start">
+                  Duplicate into this course
+                </Button>
+              </form>
+            )}
           </Card>
         </Section>
       )}

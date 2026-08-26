@@ -15,6 +15,7 @@ const TENANT_SCOPED_MODELS = new Set([
   "Enrollment",
   "Question",
   "Exam",
+  "LinkedAssessment",
   "ExamAttempt",
   "AuditLog",
   "DeviceRegistration",

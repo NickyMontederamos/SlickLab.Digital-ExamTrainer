@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { CourseAccessDeniedError, CourseNotFoundError, getCourseWithRoster } from "@/lib/courses";
+import { setBenchmarkBank } from "@/lib/benchmarks";
 import { getCourseExamSummaries } from "@/lib/grading";
-import { Badge, Card, EmptyState, LinkButton, PageHeader, Section } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, LinkButton, PageHeader, Section } from "@/components/ui";
 
 /**
  * The course-home landing page (docs/PITCH_ROADMAP.md Milestone 6.7):
@@ -26,7 +28,7 @@ export default async function CourseHomePage({ params }: { params: Promise<{ cou
   const { courseId } = await params;
   const institutionId = session.user.institutionId;
 
-  let course;
+  let course: Awaited<ReturnType<typeof getCourseWithRoster>>;
   try {
     course = await getCourseWithRoster(institutionId, session.user, courseId);
   } catch (err) {
@@ -43,13 +45,28 @@ export default async function CourseHomePage({ params }: { params: Promise<{ cou
   const totalPending = examSummaries.reduce((sum, e) => sum + e.pendingCount, 0);
   const canManage = can(session.user.role, "course", "update");
 
+  async function toggleBenchmarkBankAction() {
+    "use server";
+    const authSession = await auth();
+    if (!authSession?.user?.institutionId) {
+      redirect("/login");
+    }
+    await setBenchmarkBank(authSession.user.institutionId, authSession.user, courseId, !course.isBenchmarkBank);
+    revalidatePath(`/courses/${courseId}`);
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6">
       <PageHeader
         backHref="/dashboard"
         title={`${course.code} — ${course.name}`}
         subtitle={course.academicYear}
-        badge={totalPending > 0 ? <Badge tone="amber">{totalPending} pending grading</Badge> : undefined}
+        badge={
+          <>
+            {course.isBenchmarkBank && <Badge tone="brand">Benchmark bank</Badge>}
+            {totalPending > 0 && <Badge tone="amber">{totalPending} pending grading</Badge>}
+          </>
+        }
         actions={
           <>
             <LinkButton href={`/courses/${courseId}/questions`} variant="secondary">
@@ -83,6 +100,24 @@ export default async function CourseHomePage({ params }: { params: Promise<{ cou
           )}
         </Card>
       </Section>
+
+      {canManage && (
+        <Section
+          title="Benchmark Assessment Bank"
+          description="A benchmark-bank course holds reusable Benchmark Assessments that faculty duplicate into their own live courses — students never take an exam directly in this course."
+        >
+          <Card className="flex items-center justify-between gap-3">
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              {course.isBenchmarkBank ? "This course is a benchmark bank." : "This course is a regular teaching course."}
+            </span>
+            <form action={toggleBenchmarkBankAction}>
+              <Button type="submit" variant="secondary">
+                {course.isBenchmarkBank ? "Turn off benchmark bank" : "Make this a benchmark bank"}
+              </Button>
+            </form>
+          </Card>
+        </Section>
+      )}
 
       <Section title={`Students (${course.enrollments.length})`}>
         {course.enrollments.length === 0 ? (

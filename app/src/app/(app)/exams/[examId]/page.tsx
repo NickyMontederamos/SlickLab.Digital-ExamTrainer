@@ -173,8 +173,11 @@ export default async function ExamBuilderPage({
   // never gets this — deleteExam() itself also enforces this, this is only
   // the UI gate.
   const canForceDelete = !isDraft && can(session.user.role, "exam_attempt", "delete");
+  const questionsLocked = Boolean(exam.linkedAsCopy);
+  const canEditQuestions = canEdit && !questionsLocked;
+  const hasBenchmarkPostings = exam.linkedAsSource.length > 0;
 
-  const availableQuestions = canEdit
+  const availableQuestions = canEditQuestions
     ? await listQuestionsForCourse(institutionId, session.user, exam.courseId)
     : [];
   const usedQuestionIds = new Set(version?.examQuestions.map((eq) => eq.questionId) ?? []);
@@ -319,14 +322,27 @@ export default async function ExamBuilderPage({
         badge={<Badge tone={exam.status === "PUBLISHED" ? "green" : "gray"}>{exam.status}</Badge>}
         subtitle={version && `${version.timeLimitMinutes} minutes`}
         actions={
-          can(session.user.role, "grade", "read") &&
-          exam.status === "PUBLISHED" && (
-            <LinkButton href={`/exams/${examId}/grading`} variant="secondary">
-              Grading
-            </LinkButton>
-          )
+          <>
+            {can(session.user.role, "grade", "read") && exam.status === "PUBLISHED" && (
+              <LinkButton href={`/exams/${examId}/grading`} variant="secondary">
+                Grading
+              </LinkButton>
+            )}
+            {hasBenchmarkPostings && (
+              <LinkButton href={`/exams/${examId}/benchmark-report`} variant="secondary">
+                Combined Report
+              </LinkButton>
+            )}
+          </>
         }
       />
+
+      {questionsLocked && (
+        <Alert tone="info">
+          This exam was duplicated from a Benchmark Assessment — its questions are shared with the source and can&apos;t
+          be added or removed here.
+        </Alert>
+      )}
 
       {imported && <Alert tone="success">Imported and attached {imported} question(s) to this exam.</Alert>}
       {importError && <Alert tone="error">Import failed — nothing was added: {importError}</Alert>}
@@ -395,7 +411,7 @@ export default async function ExamBuilderPage({
                 <span className="font-medium text-slate-900 dark:text-slate-100">Q{eq.order + 1}</span>
                 <span className="flex items-center gap-3">
                   <span className="text-slate-500 dark:text-slate-400">{eq.points} pt(s)</span>
-                  {canEdit && (
+                  {canEditQuestions && (
                     <form action={removeQuestionAction}>
                       <input type="hidden" name="examQuestionId" value={eq.id} />
                       <Button type="submit" variant="danger" className="px-2.5 py-1 text-xs">
@@ -411,7 +427,7 @@ export default async function ExamBuilderPage({
         </div>
       </Section>
 
-      {canEdit && (
+      {canEditQuestions && (
         <>
           <Section
             title="Import from CSV directly into this exam"
