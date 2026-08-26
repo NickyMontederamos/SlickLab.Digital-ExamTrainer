@@ -5,6 +5,7 @@ import { can } from "@/lib/rbac";
 import { ExamEntryGate } from "@/components/ExamEntryGate";
 import { ExamDownloadGate } from "@/components/ExamDownloadGate";
 import { AssessmentPasswordField, UniversalResumeCodeField } from "@/components/PostAssessmentSettingsFields";
+import { DuplicateAssessmentModal } from "@/components/DuplicateAssessmentModal";
 import {
   addExamQuestion,
   addExamQuestions,
@@ -17,6 +18,8 @@ import {
   removeExamQuestion,
   updateExam,
 } from "@/lib/exams";
+import { duplicateBenchmarkExam, SourceExamNotBenchmarkError, TargetIsBenchmarkBankError } from "@/lib/benchmarks";
+import { listCoursesForUser } from "@/lib/courses";
 import { listQuestionsForCourse } from "@/lib/questions";
 import { importQuestionsFromCsv, QuestionImportValidationError } from "@/lib/question-import";
 import {
@@ -47,7 +50,13 @@ export default async function ExamBuilderPage({
   searchParams,
 }: {
   params: Promise<{ examId: string }>;
-  searchParams: Promise<{ importError?: string; imported?: string; bulkError?: string; bookingError?: string }>;
+  searchParams: Promise<{
+    importError?: string;
+    imported?: string;
+    bulkError?: string;
+    bookingError?: string;
+    duplicateError?: string;
+  }>;
 }) {
   const session = await auth();
   if (!session?.user?.institutionId) {
@@ -55,7 +64,7 @@ export default async function ExamBuilderPage({
   }
 
   const { examId } = await params;
-  const { importError, imported, bulkError, bookingError } = await searchParams;
+  const { importError, imported, bulkError, bookingError, duplicateError } = await searchParams;
   const institutionId = session.user.institutionId;
 
   let exam: Awaited<ReturnType<typeof getExam>>;
@@ -207,6 +216,12 @@ export default async function ExamBuilderPage({
   const questionsLocked = Boolean(exam.linkedAsCopy);
   const canEditQuestions = canEdit && !questionsLocked;
   const hasBenchmarkPostings = exam.linkedAsSource.length > 0;
+  const canDuplicate = exam.kind === "BENCHMARK" && exam.status === "PUBLISHED" && can(session.user.role, "exam", "create");
+  const duplicateTargets = canDuplicate
+    ? (await listCoursesForUser(institutionId, session.user))
+        .filter((c) => !c.isBenchmarkBank)
+        .map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))
+    : [];
 
   const availableQuestions = canEditQuestions
     ? await listQuestionsForCourse(institutionId, session.user, exam.courseId)
@@ -361,6 +376,37 @@ export default async function ExamBuilderPage({
     revalidatePath(`/exams/${examId}`);
   }
 
+  async function duplicateAction(formData: FormData) {
+    "use server";
+    const authSession = await auth();
+    const actorId = authSession?.user?.id;
+    const actorInstitutionId = authSession?.user?.institutionId;
+    const actorRole = authSession?.user?.role;
+    if (!actorId || !actorInstitutionId || !actorRole) {
+      redirect("/login");
+    }
+
+    const targetCourseId = String(formData.get("targetCourseId") ?? "");
+    if (!targetCourseId) {
+      redirect(`/exams/${examId}?duplicateError=${encodeURIComponent("Pick a course to assign this posting to")}`);
+    }
+
+    let linked;
+    try {
+      linked = await duplicateBenchmarkExam(actorInstitutionId, { id: actorId, role: actorRole }, {
+        sourceExamId: examId,
+        targetCourseId,
+      });
+    } catch (err) {
+      if (err instanceof SourceExamNotBenchmarkError || err instanceof TargetIsBenchmarkBankError) {
+        redirect(`/exams/${examId}?duplicateError=${encodeURIComponent(err.message)}`);
+      }
+      throw err;
+    }
+
+    redirect(`/exams/${linked.id}`);
+  }
+
   async function publishAction() {
     "use server";
     const authSession = await auth();
@@ -392,6 +438,14 @@ export default async function ExamBuilderPage({
                 Combined Report
               </LinkButton>
             )}
+            {canDuplicate && (
+              <DuplicateAssessmentModal
+                examTitle={exam.title}
+                targetCourses={duplicateTargets}
+                duplicateAction={duplicateAction}
+                error={duplicateError}
+              />
+            )}
           </>
         }
       />
@@ -401,6 +455,24 @@ export default async function ExamBuilderPage({
           This exam was duplicated from a Benchmark Assessment — its questions are shared with the source and can&apos;t
           be added or removed here.
         </Alert>
+      )}
+
+      {hasBenchmarkPostings && (
+        <Section title="Manage your postings" description="Every course this Benchmark Assessment has been posted to, as a Linked Assessment.">
+          <div className="flex flex-col gap-2">
+            {exam.linkedAsSource.map((link) => (
+              <Card key={link.id} className="flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-900 dark:text-slate-100">{link.linkedExam.course.name}</span>
+                <div className="flex items-center gap-2">
+                  <Badge tone={link.linkedExam.status === "PUBLISHED" ? "green" : "gray"}>{link.linkedExam.status}</Badge>
+                  <LinkButton href={`/exams/${link.linkedExam.id}`} variant="secondary" className="px-2.5 py-1 text-xs">
+                    Manage posting
+                  </LinkButton>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
       )}
 
       {imported && <Alert tone="success">Imported and attached {imported} question(s) to this exam.</Alert>}

@@ -3,19 +3,15 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { createExam, listExamsForCourse } from "@/lib/exams";
-import { duplicateBenchmarkExam, listBenchmarkExamsForInstitution } from "@/lib/benchmarks";
 import { forTenant } from "@/lib/tenant-db";
 import { CreateAssessmentModal } from "@/components/CreateAssessmentModal";
-import { SelectAssessmentModal } from "@/components/SelectAssessmentModal";
 import { PortalTable, type PortalTableRow } from "@/components/PortalTable";
-import { Alert, EmptyState, LinkButton, PageHeader } from "@/components/ui";
+import { EmptyState, LinkButton, PageHeader } from "@/components/ui";
 
 export default async function CourseExamsPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ courseId: string }>;
-  searchParams: Promise<{ duplicateError?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.institutionId) {
@@ -23,7 +19,6 @@ export default async function CourseExamsPage({
   }
 
   const { courseId } = await params;
-  const { duplicateError } = await searchParams;
   const institutionId = session.user.institutionId;
 
   const course = await forTenant(institutionId).course.findFirst({ where: { id: courseId } });
@@ -35,8 +30,6 @@ export default async function CourseExamsPage({
     ? await listExamsForCourse(institutionId, session.user, courseId)
     : [];
   const canCreate = can(session.user.role, "exam", "create");
-  const benchmarkExams =
-    canCreate && !course.isBenchmarkBank ? await listBenchmarkExamsForInstitution(institutionId, session.user) : [];
 
   async function createExamAction(formData: FormData) {
     "use server";
@@ -66,35 +59,13 @@ export default async function CourseExamsPage({
     revalidatePath(`/courses/${courseId}/exams`);
   }
 
-  async function duplicateBenchmarkAction(formData: FormData) {
-    "use server";
-    const authSession = await auth();
-    const actorId = authSession?.user?.id;
-    const actorInstitutionId = authSession?.user?.institutionId;
-    const actorRole = authSession?.user?.role;
-    if (!actorId || !actorInstitutionId || !actorRole) {
-      redirect("/login");
-    }
-
-    const sourceExamId = String(formData.get("sourceExamId") ?? "");
-    if (!sourceExamId) {
-      redirect(`/courses/${courseId}/exams?duplicateError=${encodeURIComponent("Pick a benchmark assessment first")}`);
-    }
-
-    const linked = await duplicateBenchmarkExam(actorInstitutionId, { id: actorId, role: actorRole }, {
-      sourceExamId,
-      targetCourseId: courseId,
-    });
-
-    redirect(`/exams/${linked.id}`);
-  }
-
   const rows: PortalTableRow[] = exams.map((exam) => {
     const version = exam.versions[0];
     return {
       id: exam.id,
       label: exam.title,
       href: `/exams/${exam.id}`,
+      status: exam.status,
       meta: `${exam.status}${version ? ` · ${version.examQuestions.length} question(s) · ${version.timeLimitMinutes} min` : ""}`,
     };
   });
@@ -110,28 +81,21 @@ export default async function CourseExamsPage({
             <LinkButton href={`/courses/${courseId}/questions`} variant="secondary">
               Question bank
             </LinkButton>
-            {canCreate && !course.isBenchmarkBank && benchmarkExams.length > 0 && (
-              <SelectAssessmentModal
-                assessments={benchmarkExams.map((exam) => ({
-                  id: exam.id,
-                  title: exam.title,
-                  courseName: exam.course.name,
-                  questionCount: exam.versions[0]?.examQuestions.length ?? 0,
-                }))}
-                duplicateBenchmarkAction={duplicateBenchmarkAction}
-              />
-            )}
             {canCreate && <CreateAssessmentModal isBenchmarkBank={course.isBenchmarkBank} createExamAction={createExamAction} />}
           </div>
         }
       />
 
-      {duplicateError && <Alert tone="error">{duplicateError}</Alert>}
-
       {exams.length === 0 ? (
         <EmptyState>No assessments found. Assessments have not yet been created for this course.</EmptyState>
       ) : (
-        <PortalTable columnLabel="Assessment Name" searchPlaceholder="Find Assessment" totalLabel="Total Assessments" rows={rows} />
+        <PortalTable
+          columnLabel="Assessment Name"
+          searchPlaceholder="Find Assessment"
+          totalLabel="Total Assessments"
+          rows={rows}
+          filterOptions={["DRAFT", "PUBLISHED"]}
+        />
       )}
     </main>
   );

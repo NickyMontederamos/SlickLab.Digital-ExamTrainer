@@ -2,17 +2,23 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
-import { DepartmentNotFoundError, getDepartmentWithCourses } from "@/lib/departments";
+import {
+  DepartmentHasCoursesError,
+  DepartmentNotFoundError,
+  deleteDepartment,
+  getDepartmentWithCourses,
+} from "@/lib/departments";
 import { createCourse, CourseCodeTakenError } from "@/lib/courses";
 import { PortalTable, type PortalTableRow } from "@/components/PortalTable";
-import { Alert, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
+import { CreateCourseModal } from "@/components/CreateCourseModal";
+import { Alert, Button, EmptyState, PageHeader } from "@/components/ui";
 
 export default async function DepartmentCoursesPage({
   params,
   searchParams,
 }: {
   params: Promise<{ departmentId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; deleteError?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id || !session.user.institutionId) {
@@ -20,7 +26,7 @@ export default async function DepartmentCoursesPage({
   }
 
   const { departmentId } = await params;
-  const { error } = await searchParams;
+  const { error, deleteError } = await searchParams;
   const institutionId = session.user.institutionId;
 
   let department: Awaited<ReturnType<typeof getDepartmentWithCourses>>;
@@ -34,6 +40,7 @@ export default async function DepartmentCoursesPage({
   }
 
   const canCreateCourse = can(session.user.role, "course", "create");
+  const canDeleteDepartment = can(session.user.role, "department", "delete");
 
   async function createCourseAction(formData: FormData) {
     "use server";
@@ -58,6 +65,25 @@ export default async function DepartmentCoursesPage({
     revalidatePath(`/departments/${departmentId}`);
   }
 
+  async function removeDepartmentAction() {
+    "use server";
+    const authSession = await auth();
+    if (!authSession?.user?.institutionId) {
+      redirect("/login");
+    }
+
+    try {
+      await deleteDepartment(authSession.user.institutionId, authSession.user, departmentId);
+    } catch (err) {
+      if (err instanceof DepartmentHasCoursesError) {
+        redirect(`/departments/${departmentId}?deleteError=${encodeURIComponent(err.message)}`);
+      }
+      throw err;
+    }
+
+    redirect("/departments");
+  }
+
   const rows: PortalTableRow[] = department.courses.map((course) => ({
     id: course.id,
     label: `${course.code} — ${course.name}`,
@@ -76,9 +102,11 @@ export default async function DepartmentCoursesPage({
         </nav>
         <PageHeader
           title="My Courses"
-          actions={canCreateCourse && <LinkButton href="#create-course" variant="success">Create A Course</LinkButton>}
+          actions={canCreateCourse && <CreateCourseModal createCourseAction={createCourseAction} error={error} />}
         />
       </div>
+
+      {deleteError && <Alert tone="error">{deleteError}</Alert>}
 
       {department.courses.length === 0 ? (
         <EmptyState>No courses in this department yet.</EmptyState>
@@ -86,35 +114,15 @@ export default async function DepartmentCoursesPage({
         <PortalTable columnLabel="Course Name" searchPlaceholder="Find Courses" totalLabel="Total Courses" rows={rows} />
       )}
 
-      {canCreateCourse && (
-        <div id="create-course">
-          <Section title="Create a course">
-            <Card>
-              {error && (
-                <div className="mb-3">
-                  <Alert tone="error">{error}</Alert>
-                </div>
-              )}
-              <form action={createCourseAction} className="flex flex-col gap-3">
-                <label className={labelClassName}>
-                  Code
-                  <input name="code" required placeholder="LAW101" className={inputClassName} />
-                </label>
-                <label className={labelClassName}>
-                  Name
-                  <input name="name" required className={inputClassName} />
-                </label>
-                <label className={labelClassName}>
-                  Academic year
-                  <input name="academicYear" required placeholder="2026-2027" className={inputClassName} />
-                </label>
-                <Button type="submit" variant="success" className="self-start">
-                  Create course
-                </Button>
-              </form>
-            </Card>
-          </Section>
-        </div>
+      {canDeleteDepartment && (
+        <form action={removeDepartmentAction} className="flex items-center gap-2">
+          <Button type="submit" variant="danger" className="self-start">
+            Remove Department
+          </Button>
+          <span className="text-xs text-slate-400 dark:text-slate-500">
+            Only possible while this department has no courses.
+          </span>
+        </form>
       )}
     </main>
   );

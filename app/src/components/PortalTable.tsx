@@ -7,6 +7,8 @@ export interface PortalTableRow {
   label: string;
   href: string;
   meta?: string;
+  /** Optional value the "Filter" dropdown matches against — pass filterOptions to enable it. */
+  status?: string;
 }
 
 /**
@@ -22,20 +24,27 @@ export function PortalTable({
   searchPlaceholder,
   totalLabel,
   rows,
+  filterOptions,
 }: {
   columnLabel: string;
   searchPlaceholder: string;
   totalLabel: string;
   rows: PortalTableRow[];
+  /** Enables the "Filter" dropdown, matched against each row's `status`. */
+  filterOptions?: string[];
 }) {
   const [query, setQuery] = useState("");
   const [sortAsc, setSortAsc] = useState(true);
+  const [statusFilter, setStatusFilter] = useState("All");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = q ? rows.filter((r) => r.label.toLowerCase().includes(q)) : rows;
+    let list = q ? rows.filter((r) => r.label.toLowerCase().includes(q)) : rows;
+    if (filterOptions && statusFilter !== "All") {
+      list = list.filter((r) => r.status === statusFilter);
+    }
     return [...list].sort((a, b) => (sortAsc ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label)));
-  }, [rows, query, sortAsc]);
+  }, [rows, query, sortAsc, statusFilter, filterOptions]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -56,17 +65,34 @@ export function PortalTable({
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 flex-none text-slate-400">
-            <circle cx="9" cy="9" r="6" />
-            <path d="m17 17-4-4" strokeLinecap="round" />
-          </svg>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
-          />
+        <div className="flex items-center border-b border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-1 items-center gap-2 px-3 py-2">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 flex-none text-slate-400">
+              <circle cx="9" cy="9" r="6" />
+              <path d="m17 17-4-4" strokeLinecap="round" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
+            />
+          </div>
+          {filterOptions && (
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter"
+              className="border-l border-slate-200 bg-transparent px-3 py-2 text-sm text-slate-600 outline-none dark:border-slate-800 dark:text-slate-300"
+            >
+              <option value="All">Filter: All</option>
+              {filterOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <button

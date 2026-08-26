@@ -172,7 +172,10 @@ export async function getExam(institutionId: string, actor: { id: string; role: 
       // linkedAsSource populated = this exam IS a benchmark source with at
       // least one course posting from it (worth a Combined Report link).
       linkedAsCopy: true,
-      linkedAsSource: { select: { id: true } },
+      linkedAsSource: {
+        include: { linkedExam: { include: { course: true } } },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!exam) {

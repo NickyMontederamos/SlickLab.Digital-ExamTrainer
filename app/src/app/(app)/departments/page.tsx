@@ -4,7 +4,8 @@ import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { createDepartment, DepartmentNameTakenError, listDepartments } from "@/lib/departments";
 import { PortalTable, type PortalTableRow } from "@/components/PortalTable";
-import { Alert, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
+import { CreateDepartmentModal } from "@/components/CreateDepartmentModal";
+import { EmptyState, PageHeader } from "@/components/ui";
 
 export default async function DepartmentsPage({
   searchParams,
@@ -52,7 +53,10 @@ export default async function DepartmentsPage({
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6">
-      <PageHeader title="My Departments" actions={canCreate && <LinkButton href="#create-department" variant="success">Create Department</LinkButton>} />
+      <PageHeader
+        title="My Departments"
+        actions={canCreate && <CreateDepartmentModal createDepartmentAction={createDepartmentAction} error={error} />}
+      />
 
       {departments.length === 0 ? (
         <EmptyState>No departments yet.</EmptyState>
@@ -63,29 +67,6 @@ export default async function DepartmentsPage({
           totalLabel="Total Departments"
           rows={rows}
         />
-      )}
-
-      {canCreate && (
-        <div id="create-department">
-          <Section title="Create a department">
-            <Card>
-              {error && (
-                <div className="mb-3">
-                  <Alert tone="error">{error}</Alert>
-                </div>
-              )}
-              <form action={createDepartmentAction} className="flex flex-col gap-3">
-                <label className={labelClassName}>
-                  Name
-                  <input name="name" required placeholder="College of Law" className={inputClassName} />
-                </label>
-                <Button type="submit" variant="success" className="self-start">
-                  Create department
-                </Button>
-              </form>
-            </Card>
-          </Section>
-        </div>
       )}
     </main>
   );
