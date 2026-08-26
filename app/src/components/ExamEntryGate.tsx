@@ -57,6 +57,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined>
  * dashboard — no fallback if no proctor is available yet, by deliberate
  * choice (see docs/NEXT_PHASE_PLAN.md); this can wait indefinitely.
  *
+ * `examMonitoringEnabled` (ExamVersion field, faculty-set) is Examplify's
+ * real ExamID + ExamMonitor distinction — some exams require them, some
+ * don't. When false, the device/identity/room-scan steps below are skipped
+ * entirely and the sequence goes straight from Exam Rules to the proctor
+ * wait; the human-proctor gate itself is a separate, always-on feature in
+ * this app and isn't tied to ExamMonitor.
+ *
  * NOTE for later hardening: the booked window doesn't currently gate when
  * "Start Exam" can be clicked — it's available immediately after booking,
  * by deliberate choice while the app is still being tested/developed. A
@@ -69,6 +76,7 @@ export function ExamEntryGate({
   windowLabel,
   scheduledForLabel,
   confirmationCode,
+  examMonitoringEnabled,
   beginAttemptAction,
   requestProctorApprovalAction,
   checkProctorApprovalAction,
@@ -78,6 +86,7 @@ export function ExamEntryGate({
   windowLabel: string | null;
   scheduledForLabel: string | null;
   confirmationCode: string;
+  examMonitoringEnabled: boolean;
   beginAttemptAction: (attemptId: string) => Promise<void>;
   requestProctorApprovalAction: (attemptId: string) => Promise<void>;
   checkProctorApprovalAction: (attemptId: string) => Promise<boolean>;
@@ -88,22 +97,24 @@ export function ExamEntryGate({
   const [error, setError] = useState<string | null>(null);
 
   async function runGateSequence() {
-    setStep("device");
-    try {
-      const request = document.documentElement.requestFullscreen?.();
-      if (request) {
-        await withTimeout(request, 1500);
+    if (examMonitoringEnabled) {
+      setStep("device");
+      try {
+        const request = document.documentElement.requestFullscreen?.();
+        if (request) {
+          await withTimeout(request, 1500);
+        }
+      } catch {
+        // Soft check — proceed regardless. See this file's top comment.
       }
-    } catch {
-      // Soft check — proceed regardless. See this file's top comment.
+      await wait(STEP_DELAY_MS);
+
+      setStep("identity");
+      await wait(STEP_DELAY_MS);
+
+      setStep("room");
+      await wait(STEP_DELAY_MS);
     }
-    await wait(STEP_DELAY_MS);
-
-    setStep("identity");
-    await wait(STEP_DELAY_MS);
-
-    setStep("room");
-    await wait(STEP_DELAY_MS);
 
     setStep("proctor");
     try {

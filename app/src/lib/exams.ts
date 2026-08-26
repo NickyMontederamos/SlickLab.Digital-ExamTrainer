@@ -176,6 +176,7 @@ export async function getExam(institutionId: string, actor: { id: string; role: 
         include: { linkedExam: { include: { course: true } } },
         orderBy: { createdAt: "asc" },
       },
+      createdBy: { select: { name: true } },
     },
   });
   if (!exam) {
@@ -193,7 +194,7 @@ export async function getExam(institutionId: string, actor: { id: string; role: 
 export async function addExamQuestion(
   institutionId: string,
   actor: { id: string; role: Role },
-  input: { examId: string; questionId: string; points: number }
+  input: { examId: string; questionId: string; points: number; sectionTitle?: string }
 ) {
   assertCan(actor.role, "exam", "update");
 
@@ -236,6 +237,7 @@ export async function addExamQuestion(
       questionVersionId: latestQuestionVersion.id,
       order,
       points: input.points,
+      sectionTitle: input.sectionTitle || null,
     },
   });
 }
@@ -305,6 +307,12 @@ export interface UpdateExamInput {
   instructions?: string;
   availableFrom?: Date;
   availableUntil?: Date;
+  allowBacktracking?: boolean;
+  calculatorAllowed?: boolean;
+  spellCheckAllowed?: boolean;
+  copyPasteAllowed?: boolean;
+  highlightingAllowed?: boolean;
+  examMonitoringEnabled?: boolean;
 }
 
 /** Edits an exam's title and its active version's settings — DRAFT only, same editability rule as adding questions. */
@@ -338,6 +346,12 @@ export async function updateExam(institutionId: string, actor: { id: string; rol
         instructions: input.instructions,
         availableFrom: input.availableFrom ?? null,
         availableUntil: input.availableUntil ?? null,
+        allowBacktracking: input.allowBacktracking ?? activeVersion.allowBacktracking,
+        calculatorAllowed: input.calculatorAllowed ?? activeVersion.calculatorAllowed,
+        spellCheckAllowed: input.spellCheckAllowed ?? activeVersion.spellCheckAllowed,
+        copyPasteAllowed: input.copyPasteAllowed ?? activeVersion.copyPasteAllowed,
+        highlightingAllowed: input.highlightingAllowed ?? activeVersion.highlightingAllowed,
+        examMonitoringEnabled: input.examMonitoringEnabled ?? activeVersion.examMonitoringEnabled,
       },
     }),
   ]);

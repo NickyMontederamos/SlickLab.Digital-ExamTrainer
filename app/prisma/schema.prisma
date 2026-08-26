@@ -336,6 +336,21 @@ model ExamVersion {
   calculatorAllowed   Boolean  @default(false)
   attachmentsAllowed  Boolean  @default(false)
   securityPolicy      Json?
+  /// Drives whether ExamEntryGate runs its device/identity/room-scan
+  /// sequence (Examplify's real ExamID + ExamMonitor pairing) before the
+  /// proctor-approval step, and whether ExamDownloadGate's settings screen
+  /// shows the ExamID/ExamMonitor tiles. Defaults true so exams created
+  /// before this field existed keep their current (always-on) behavior.
+  examMonitoringEnabled Boolean @default(true)
+  /// Real, faculty-set exam-tool flags shown on the pre-exam settings
+  /// screen (Examplify's "Exam Tools" panel). Same posture as the existing
+  /// calculatorAllowed above: a real stored setting, accurately displayed —
+  /// runtime enforcement in the exam-taking UI (spellcheck attribute,
+  /// copy/paste blocking, a highlight feature) is not yet built, matching
+  /// calculatorAllowed's own current scope.
+  spellCheckAllowed   Boolean  @default(true)
+  copyPasteAllowed    Boolean  @default(true)
+  highlightingAllowed Boolean  @default(true)
   /// Post Assessment Settings (docs reference: ExamSoft's "Post an
   /// Assessment" faculty workflow). Plaintext, not a real security
   /// boundary — same honesty posture as ExamDownloadGate's "Non-Secure"
@@ -380,6 +395,11 @@ model ExamQuestion {
   questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
   order             Int
   points            Float
+  /// Optional grouping label (Examplify's "Sections" panel, e.g. "General
+  /// Math" / "Reading Comp"). Null means this exam has no sections — the
+  /// pre-exam settings screen only shows a Sections list when at least one
+  /// question on the exam has this set.
+  sectionTitle      String?
 
   examAnswers ExamAnswer[]
 

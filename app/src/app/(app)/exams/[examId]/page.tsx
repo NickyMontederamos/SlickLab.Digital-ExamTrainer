@@ -166,6 +166,7 @@ export default async function ExamBuilderPage({
         {myAttempt?.status === "NOT_STARTED" && (
           <ExamDownloadGate
             attemptId={myAttempt.id}
+            examId={exam.id}
             examTitle={exam.title}
             timeLimitMinutes={version?.timeLimitMinutes ?? 60}
             questionCount={version?.examQuestions.length ?? 0}
@@ -176,6 +177,16 @@ export default async function ExamBuilderPage({
             downloadCount={myAttempt.downloadCount}
             remoteDeletionAt={version?.remoteDeletionAt ? version.remoteDeletionAt.getTime() : null}
             validateDownloadAction={validateDownloadPasswordAction}
+            instructorName={exam.createdBy?.name ?? null}
+            allowBacktracking={version?.allowBacktracking ?? true}
+            calculatorAllowed={version?.calculatorAllowed ?? false}
+            spellCheckAllowed={version?.spellCheckAllowed ?? true}
+            copyPasteAllowed={version?.copyPasteAllowed ?? true}
+            highlightingAllowed={version?.highlightingAllowed ?? true}
+            examMonitoringEnabled={version?.examMonitoringEnabled ?? true}
+            sections={Array.from(
+              new Set((version?.examQuestions ?? []).map((eq) => eq.sectionTitle).filter((s): s is string => Boolean(s)))
+            )}
           >
             <ExamEntryGate
               attemptId={myAttempt.id}
@@ -183,6 +194,7 @@ export default async function ExamBuilderPage({
               windowLabel={windowLabel}
               scheduledForLabel={scheduledForLabel}
               confirmationCode={myAttempt.id}
+              examMonitoringEnabled={version?.examMonitoringEnabled ?? true}
               beginAttemptAction={beginAttemptAction}
               requestProctorApprovalAction={requestProctorApprovalAction}
               checkProctorApprovalAction={checkProctorApprovalAction}
@@ -246,6 +258,12 @@ export default async function ExamBuilderPage({
       timeLimitMinutes,
       availableFrom: availableFromRaw ? new Date(availableFromRaw) : undefined,
       availableUntil: availableUntilRaw ? new Date(availableUntilRaw) : undefined,
+      allowBacktracking: formData.get("allowBacktracking") === "on",
+      calculatorAllowed: formData.get("calculatorAllowed") === "on",
+      spellCheckAllowed: formData.get("spellCheckAllowed") === "on",
+      copyPasteAllowed: formData.get("copyPasteAllowed") === "on",
+      highlightingAllowed: formData.get("highlightingAllowed") === "on",
+      examMonitoringEnabled: formData.get("examMonitoringEnabled") === "on",
     });
     revalidatePath(`/exams/${examId}`);
   }
@@ -284,9 +302,15 @@ export default async function ExamBuilderPage({
 
     const questionId = String(formData.get("questionId") ?? "");
     const points = Number(formData.get("points") ?? 1);
+    const sectionTitle = String(formData.get("sectionTitle") ?? "").trim();
     if (!questionId) return;
 
-    await addExamQuestion(authSession.user.institutionId, authSession.user, { examId, questionId, points });
+    await addExamQuestion(authSession.user.institutionId, authSession.user, {
+      examId,
+      questionId,
+      points,
+      sectionTitle: sectionTitle || undefined,
+    });
     revalidatePath(`/exams/${examId}`);
   }
 
@@ -519,6 +543,39 @@ export default async function ExamBuilderPage({
                   className={inputClassName}
                 />
               </label>
+
+              <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Exam Tools &amp; Security</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Shown to the student on the pre-exam settings screen before they start. This trainer never actually
+                  locks down a device — every exam stays &quot;Non-Secure&quot; regardless of these toggles.
+                </p>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input type="checkbox" name="allowBacktracking" defaultChecked={version.allowBacktracking} />
+                  Allow backward navigation between questions
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input type="checkbox" name="calculatorAllowed" defaultChecked={version.calculatorAllowed} />
+                  Calculator allowed
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input type="checkbox" name="spellCheckAllowed" defaultChecked={version.spellCheckAllowed} />
+                  Spell check allowed
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input type="checkbox" name="copyPasteAllowed" defaultChecked={version.copyPasteAllowed} />
+                  Copy &amp; paste allowed
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input type="checkbox" name="highlightingAllowed" defaultChecked={version.highlightingAllowed} />
+                  Highlighting allowed
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                  <input type="checkbox" name="examMonitoringEnabled" defaultChecked={version.examMonitoringEnabled} />
+                  Require ExamID &amp; ExamMonitor (device/identity/room checks before the exam starts)
+                </label>
+              </div>
+
               <Button type="submit" variant="secondary" className="self-start">
                 Save changes
               </Button>
@@ -717,6 +774,18 @@ export default async function ExamBuilderPage({
                     Points
                     <input name="points" type="number" step="0.5" defaultValue={1} className={inputClassName} />
                   </label>
+                  <label className={labelClassName}>
+                    Section (optional)
+                    <input
+                      name="sectionTitle"
+                      placeholder="e.g. General Math"
+                      className={inputClassName}
+                    />
+                  </label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Give two or more questions the same section name to group them on the student&apos;s pre-exam
+                    settings screen. Leave blank for a single-section exam.
+                  </p>
                   <Button type="submit" className="self-start">
                     Add to exam
                   </Button>
