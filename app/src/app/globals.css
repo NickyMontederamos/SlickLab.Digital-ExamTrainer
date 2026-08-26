@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Explicit toggle, not just prefers-color-scheme — ThemeToggle.tsx sets
+   `.dark` on <html> and persists the choice, so a `dark:` utility here
+   means "the .dark class is set", not "the OS says dark". */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -9,6 +14,11 @@
      only apply pre-login or if an institution never set custom colors. */
   --brand-primary: #4338ca;
   --brand-secondary: #0f766e;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
 }
 
 @theme inline {

@@ -3,6 +3,7 @@ import { auth, signOut } from "@/auth";
 import { getDemoInstitutionBranding } from "@/lib/branding";
 import { can } from "@/lib/rbac";
 import { Badge, Button } from "@/components/ui";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 /**
  * Institution branding + real navigation, shared by every authenticated
@@ -36,7 +37,7 @@ export async function AppHeader() {
 
   return (
     <header
-      className="border-b border-slate-200 bg-white"
+      className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
       style={{ borderBottomColor: "var(--brand-primary)", borderBottomWidth: session?.user ? "3px" : undefined }}
     >
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
@@ -48,7 +49,7 @@ export async function AppHeader() {
             {branding?.logoUrl && (
               <Image src={branding.logoUrl} alt="College of Law crest" width={34} height={40} className="h-auto w-[34px]" />
             )}
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {branding?.name ?? "College of Maasin — College of Law"}
             </span>
             {/* Persistent, unmissable — this app deliberately mimics real secure-exam
@@ -63,7 +64,7 @@ export async function AppHeader() {
                 <a
                   key={link.href}
                   href={link.href}
-                  className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                  className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 >
                   {link.label}
                 </a>
@@ -72,24 +73,27 @@ export async function AppHeader() {
           )}
         </div>
 
-        {session?.user && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-500">
-              {session.user.name} <span className="text-slate-300">·</span>{" "}
-              <span className="font-medium text-slate-700">{session.user.role}</span>
-            </span>
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/login" });
-              }}
-            >
-              <Button type="submit" variant="ghost" className="px-2.5 py-1 text-xs">
-                Sign out
-              </Button>
-            </form>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {session?.user && (
+            <>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {session.user.name} <span className="text-slate-300 dark:text-slate-600">·</span>{" "}
+                <span className="font-medium text-slate-700 dark:text-slate-300">{session.user.role}</span>
+              </span>
+              <form
+                action={async () => {
+                  "use server";
+                  await signOut({ redirectTo: "/login" });
+                }}
+              >
+                <Button type="submit" variant="ghost" className="px-2.5 py-1 text-xs">
+                  Sign out
+                </Button>
+              </form>
+            </>
+          )}
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

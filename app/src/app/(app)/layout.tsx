@@ -35,7 +35,7 @@ export default async function AppGroupLayout({ children }: { children: ReactNode
   if (branding?.secondaryColor) brandStyle["--brand-secondary"] = branding.secondaryColor;
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-50" style={brandStyle}>
+    <div className="flex min-h-full flex-col bg-slate-50 dark:bg-slate-950" style={brandStyle}>
       <AppHeader />
       <div className="flex flex-1 flex-col">{children}</div>
     </div>

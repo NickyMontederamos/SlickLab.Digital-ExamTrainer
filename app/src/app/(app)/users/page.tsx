@@ -86,15 +86,15 @@ export default async function UsersPage({
               <Card className="text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    <span className="font-medium text-slate-900">{user.name}</span>{" "}
-                    <span className="text-slate-500">({user.email})</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{user.name}</span>{" "}
+                    <span className="text-slate-500 dark:text-slate-400">({user.email})</span>
                   </span>
                   <span className="flex items-center gap-2">
                     <Badge>{user.role}</Badge>
                     {!user.isActive && <Badge tone="red">Inactive</Badge>}
                   </span>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3 dark:border-slate-800">
                   <form action={toggleActiveAction}>
                     <input type="hidden" name="userId" value={user.id} />
                     <input type="hidden" name="nextActive" value={(!user.isActive).toString()} />
@@ -108,7 +108,7 @@ export default async function UsersPage({
                       type="password"
                       placeholder="New password"
                       minLength={8}
-                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs dark:border-slate-700"
                     />
                     <input type="hidden" name="userId" value={user.id} />
                     <Button type="submit" variant="secondary" className="px-2.5 py-1 text-xs">

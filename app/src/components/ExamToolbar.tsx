@@ -50,7 +50,7 @@ function Calculator() {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="rounded-lg bg-slate-100 p-2 text-right font-mono text-lg tabular-nums text-slate-900">{display}</div>
+      <div className="rounded-lg bg-slate-100 p-2 text-right font-mono text-lg tabular-nums text-slate-900 dark:bg-slate-800 dark:text-slate-100">{display}</div>
       <div className="grid grid-cols-4 gap-1">
         {keys.map((k) => (
           <button
@@ -61,7 +61,7 @@ function Calculator() {
               else if (k === ".") pressDecimal();
               else pressOperator(k);
             }}
-            className="rounded-lg border border-slate-200 py-1 text-sm transition-colors hover:bg-slate-50"
+            className="rounded-lg border border-slate-200 py-1 text-sm transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
           >
             {k}
           </button>
@@ -70,7 +70,7 @@ function Calculator() {
       <button
         type="button"
         onClick={clearAll}
-        className="rounded-lg border border-slate-200 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-50"
+        className="rounded-lg border border-slate-200 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"
       >
         Clear
       </button>
@@ -86,7 +86,7 @@ function Notepad() {
       onChange={(e) => setText(e.target.value)}
       rows={8}
       placeholder="Scratch notes — not saved, cleared on reload"
-      className="w-full resize-none rounded-lg border border-slate-200 p-2 text-sm"
+      className="w-full resize-none rounded-lg border border-slate-200 p-2 text-sm dark:border-slate-800"
     />
   );
 }
@@ -106,25 +106,25 @@ export function ExamToolbar() {
         <button
           type="button"
           onClick={() => setOpen(open === "calculator" ? null : "calculator")}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-slate-50"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
         >
           Calculator
         </button>
         <button
           type="button"
           onClick={() => setOpen(open === "notepad" ? null : "notepad")}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-slate-50"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
         >
           Notepad
         </button>
       </div>
       {open && (
-        <div className="w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+        <div className="w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-800 dark:bg-slate-900">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium uppercase text-slate-500">
+            <span className="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">
               {open === "calculator" ? "Calculator" : "Notepad"}
             </span>
-            <button type="button" onClick={() => setOpen(null)} className="text-xs text-slate-400 hover:text-slate-700">
+            <button type="button" onClick={() => setOpen(null)} className="text-xs text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300">
               Close
             </button>
           </div>

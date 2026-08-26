@@ -68,7 +68,7 @@ export default async function CourseHomePage({ params }: { params: Promise<{ cou
       />
 
       <Section title={`Taught by ${course.faculty.length} · Proctored by ${course.proctors.length}`}>
-        <Card className="text-sm text-slate-600">
+        <Card className="text-sm text-slate-600 dark:text-slate-400">
           {course.faculty.length === 0 && course.proctors.length === 0 ? (
             <span>No faculty or proctors assigned yet.</span>
           ) : (
@@ -88,21 +88,21 @@ export default async function CourseHomePage({ params }: { params: Promise<{ cou
         {course.enrollments.length === 0 ? (
           <EmptyState>No students enrolled yet.</EmptyState>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                 <tr>
                   <th className="px-4 py-2 font-medium">Name</th>
                   <th className="px-4 py-2 font-medium">Email</th>
                   <th className="px-4 py-2 font-medium">Enrolled</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {course.enrollments.map((e) => (
                   <tr key={e.id}>
-                    <td className="px-4 py-2 font-medium text-slate-900">{e.user.name}</td>
-                    <td className="px-4 py-2 text-slate-600">{e.user.email}</td>
-                    <td className="px-4 py-2 text-slate-500">
+                    <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{e.user.name}</td>
+                    <td className="px-4 py-2 text-slate-600 dark:text-slate-400">{e.user.email}</td>
+                    <td className="px-4 py-2 text-slate-500 dark:text-slate-400">
                       {e.enrolledAt.toLocaleDateString(undefined, { dateStyle: "medium" })}
                     </td>
                   </tr>
@@ -121,10 +121,10 @@ export default async function CourseHomePage({ params }: { params: Promise<{ cou
             {examSummaries.map((exam) => (
               <Card key={exam.examId} className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-slate-900">{exam.title}</span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100">{exam.title}</span>
                   <Badge tone={exam.status === "PUBLISHED" ? "green" : "gray"}>{exam.status}</Badge>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                   <span>{exam.submittedCount} submitted</span>
                   <span>{exam.gradedCount} graded</span>
                   {exam.terminatedCount > 0 && <span>{exam.terminatedCount} terminated</span>}

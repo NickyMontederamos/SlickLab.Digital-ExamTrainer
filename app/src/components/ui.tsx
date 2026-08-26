@@ -52,6 +52,7 @@ export function Card({
     <Tag
       className={
         "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 ease-in-out " +
+        "dark:border-slate-800 dark:bg-slate-900 " +
         (interactive ? "hover:-translate-y-0.5 hover:shadow-md " : "") +
         className
       }
@@ -62,12 +63,12 @@ export function Card({
 }
 
 const BADGE_TONES = {
-  gray: "bg-slate-100 text-slate-700",
+  gray: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   brand: "bg-brand-primary/10 text-brand-primary",
-  green: "bg-emerald-100 text-emerald-800",
-  amber: "bg-amber-100 text-amber-800",
-  red: "bg-red-100 text-red-800",
-  blue: "bg-blue-100 text-blue-800",
+  green: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+  amber: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  red: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+  blue: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
 } as const;
 
 export type BadgeTone = keyof typeof BADGE_TONES;
@@ -82,10 +83,10 @@ export function Badge({ tone = "gray", children }: { tone?: BadgeTone; children:
 }
 
 const ALERT_TONES = {
-  success: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  error: "border-red-200 bg-red-50 text-red-700",
-  warning: "border-amber-200 bg-amber-50 text-amber-800",
-  info: "border-blue-200 bg-blue-50 text-blue-800",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
+  error: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
+  warning: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
+  info: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300",
 } as const;
 
 /** A banner message — form errors, success confirmations, warnings. Replaces the `role="alert"` div every page used to redefine by hand. Fades/slides in on mount so it reads as a fresh event, not part of the static page. */
@@ -122,23 +123,23 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-slate-200 pb-4">
+    <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 dark:border-slate-800">
       {backHref && (
         <a
           href={backHref}
-          className="w-fit rounded-md text-sm text-slate-500 transition-colors duration-200 hover:text-brand-primary"
+          className="w-fit rounded-md text-sm text-slate-500 transition-colors duration-200 hover:text-brand-primary dark:text-slate-400"
         >
           ← {backLabel}
         </a>
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{title}</h1>
           {badge}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
-      {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
+      {subtitle && <p className="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>}
     </div>
   );
 }
@@ -156,8 +157,8 @@ export function Section({
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-        {description && <p className="text-xs text-slate-500">{description}</p>}
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+        {description && <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>}
       </div>
       {children}
     </section>
@@ -167,8 +168,8 @@ export function Section({
 /** The "no data yet" state — was a bare gray paragraph everywhere; now a soft, intentional-looking placeholder with an icon accent instead of reading as broken or unfinished. */
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center text-sm text-slate-500">
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400" aria-hidden="true">
+    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5">
           <path
             strokeLinecap="round"
@@ -184,6 +185,7 @@ export function EmptyState({ children }: { children: ReactNode }) {
 
 export const inputClassName =
   "rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 " +
-  "transition-all duration-200 ease-in-out focus:border-brand-primary focus:outline-none";
+  "transition-all duration-200 ease-in-out focus:border-brand-primary focus:outline-none " +
+  "dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
 
-export const labelClassName = "flex flex-col gap-1 text-sm font-medium text-slate-700";
+export const labelClassName = "flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-300";

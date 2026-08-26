@@ -55,22 +55,22 @@ function RosterSection({
     <Section title={`${title} (${members.length})`}>
       <Card className="p-0">
         {members.length === 0 ? (
-          <p className="p-4 text-sm text-slate-500">{emptyLabel}</p>
+          <p className="p-4 text-sm text-slate-500 dark:text-slate-400">{emptyLabel}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                 <tr>
                   <th className="px-4 py-2 font-medium">Name</th>
                   <th className="px-4 py-2 font-medium">Email</th>
                   <th className="px-4 py-2 font-medium"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {members.map((m) => (
                   <tr key={m.id}>
-                    <td className="px-4 py-2 font-medium text-slate-900">{m.user.name}</td>
-                    <td className="px-4 py-2 text-slate-600">{m.user.email}</td>
+                    <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{m.user.name}</td>
+                    <td className="px-4 py-2 text-slate-600 dark:text-slate-400">{m.user.email}</td>
                     <td className="px-4 py-2 text-right">
                       <form action={unassignAction}>
                         <input type="hidden" name="userId" value={m.userId} />
@@ -85,7 +85,7 @@ function RosterSection({
             </table>
           </div>
         )}
-        <div className="border-t border-slate-100 p-4">
+        <div className="border-t border-slate-100 p-4 dark:border-slate-800">
         {assignableUsers.length > 0 ? (
           <form action={assignAction} className="flex items-center gap-2">
             <select name="userId" required className={`flex-1 ${inputClassName}`}>
@@ -99,7 +99,7 @@ function RosterSection({
           </form>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm text-slate-500">{noAccountsLabel}.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{noAccountsLabel}.</p>
             <LinkButton href="/users" variant="secondary" className="px-2.5 py-1 text-xs">
               Add one on the Users page
             </LinkButton>
@@ -315,15 +315,15 @@ export default async function ManageCoursePage({
 
       {newAccounts && newAccounts.length > 0 && (
         <Section title="New account credentials — shown once">
-          <Card className="border-amber-300 bg-amber-50">
-            <p className="mb-3 text-sm text-amber-900">
+          <Card className="border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+            <p className="mb-3 text-sm text-amber-900 dark:text-amber-300">
               These accounts were just created with a temporary password. This is the only time it will be
               shown — copy or download it now and share it with each person out of band; reloading or
               revisiting this page will not bring it back.
             </p>
-            <div className="overflow-x-auto rounded-lg border border-amber-200 bg-white">
+            <div className="overflow-x-auto rounded-lg border border-amber-200 bg-white dark:border-amber-900 dark:bg-slate-900">
               <table className="w-full text-left text-sm">
-                <thead className="bg-amber-100 text-xs uppercase tracking-wide text-amber-800">
+                <thead className="bg-amber-100 text-xs uppercase tracking-wide text-amber-800 dark:bg-amber-900 dark:text-amber-300">
                   <tr>
                     <th className="px-4 py-2 font-medium">Name</th>
                     <th className="px-4 py-2 font-medium">Email</th>
@@ -331,13 +331,13 @@ export default async function ManageCoursePage({
                     <th className="px-4 py-2 font-medium">Temporary password</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-amber-100">
+                <tbody className="divide-y divide-amber-100 dark:divide-amber-900">
                   {newAccounts.map((a) => (
                     <tr key={a.email}>
-                      <td className="px-4 py-2 font-medium text-slate-900">{a.name}</td>
-                      <td className="px-4 py-2 text-slate-600">{a.email}</td>
-                      <td className="px-4 py-2 text-slate-600">{a.role}</td>
-                      <td className="px-4 py-2 font-mono text-slate-900">{a.tempPassword}</td>
+                      <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{a.name}</td>
+                      <td className="px-4 py-2 text-slate-600 dark:text-slate-400">{a.email}</td>
+                      <td className="px-4 py-2 text-slate-600 dark:text-slate-400">{a.role}</td>
+                      <td className="px-4 py-2 font-mono text-slate-900 dark:text-slate-100">{a.tempPassword}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -377,16 +377,16 @@ export default async function ManageCoursePage({
           </form>
 
           {canDelete && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
+            <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
               {isEmpty ? (
                 <form action={deleteCourseAction}>
                   <Button type="submit" variant="danger">
                     Delete course
                   </Button>
-                  <p className="mt-1 text-xs text-slate-500">This course has no questions or exams — safe to delete.</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">This course has no questions or exams — safe to delete.</p>
                 </form>
               ) : (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Can&apos;t delete — this course has {course._count.questions} question(s) and {course._count.exams}{" "}
                   exam(s) attached. Those are academic records.
                 </p>

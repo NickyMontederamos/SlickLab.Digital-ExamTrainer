@@ -46,8 +46,8 @@ export default async function ExamGradingPage({ params }: { params: Promise<{ ex
               const strikeCount = attempt.events.filter((e) => STRIKE_EVENT_TYPES.includes(e.type)).length;
               return (
                 <a key={attempt.id} href={`/attempts/${attempt.id}/review`}>
-                  <Card interactive className="flex items-center justify-between border-amber-300 bg-amber-50 text-sm">
-                    <span className="text-slate-900">{attempt.student.name}</span>
+                  <Card interactive className="flex items-center justify-between border-amber-300 bg-amber-50 text-sm dark:border-amber-800 dark:bg-amber-950">
+                    <span className="text-slate-900 dark:text-slate-100">{attempt.student.name}</span>
                     <Badge tone="amber">{strikeCount} strike(s) — paused</Badge>
                   </Card>
                 </a>
@@ -76,7 +76,7 @@ export default async function ExamGradingPage({ params }: { params: Promise<{ ex
                 return (
                   <a key={attempt.id} href={isTerminated ? `/attempts/${attempt.id}/review` : `/attempts/${attempt.id}/grade`}>
                     <Card interactive className="flex items-center justify-between text-sm">
-                      <span className="text-slate-900">{attempt.student.name}</span>
+                      <span className="text-slate-900 dark:text-slate-100">{attempt.student.name}</span>
                       <Badge tone={isTerminated ? "red" : attempt.status === "GRADED" ? "green" : "amber"}>
                         {isTerminated
                           ? "Terminated"

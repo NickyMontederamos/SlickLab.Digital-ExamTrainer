@@ -44,7 +44,7 @@ export default async function AttemptResultPage({
         <AutoRefresh intervalMs={5000} />
         <PageHeader backHref="/dashboard" title={result.attempt.examVersion.exam.title} />
         <div className="flex flex-col items-center gap-4 py-8 text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-primary" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-primary dark:border-slate-700" />
           <Alert tone="warning">
             Your exam has been submitted. Waiting for your proctor to approve closing out your session — this page
             updates automatically once that happens.
@@ -71,10 +71,10 @@ export default async function AttemptResultPage({
         </Alert>
       ) : (
         <Card className="flex flex-col items-center gap-1 py-6 text-center">
-          <span className="text-4xl font-semibold tracking-tight text-slate-900">
-            {result.scoredPoints} <span className="text-2xl font-normal text-slate-400">/ {result.totalPoints}</span>
+          <span className="text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            {result.scoredPoints} <span className="text-2xl font-normal text-slate-400 dark:text-slate-500">/ {result.totalPoints}</span>
           </span>
-          <span className="text-sm text-slate-500">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
             {result.isFullyGraded ? "Final score" : "Partial score so far — some answers pending manual grading"}
           </span>
         </Card>
@@ -86,12 +86,12 @@ export default async function AttemptResultPage({
             <ReviewMark row={row} />
             <div className="flex-1">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">Q{i + 1}</span>
-                <span className="text-slate-500">
+                <span className="font-medium text-slate-900 dark:text-slate-100">Q{i + 1}</span>
+                <span className="text-slate-500 dark:text-slate-400">
                   {row.pending ? "Pending grading" : `${row.pointsAwarded} / ${row.maxPoints} pt(s)`}
                 </span>
               </div>
-              <p className="mt-1 text-slate-700">{row.prompt}</p>
+              <p className="mt-1 text-slate-700 dark:text-slate-300">{row.prompt}</p>
             </div>
           </Card>
         ))}
@@ -115,14 +115,14 @@ function UploadConfirmation({ verifiedAt }: { verifiedAt: Date }) {
   }).format(verifiedAt);
 
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
-      <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+    <div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+      <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
           <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.4 7.4a1 1 0 01-1.4 0L3.3 9.5a1 1 0 111.4-1.4l3.9 3.9 6.7-6.7a1 1 0 011.4 0z" clipRule="evenodd" />
         </svg>
       </span>
       <span>
-        Submitted and confirmed <span className="text-emerald-600">·</span> {formatted}
+        Submitted and confirmed <span className="text-emerald-600 dark:text-emerald-500">·</span> {formatted}
       </span>
     </div>
   );
@@ -140,7 +140,7 @@ function ReviewMark({ row }: { row: { pending: boolean; pointsAwarded: number | 
   if (row.pending) {
     return (
       <span
-        className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-amber-100 text-amber-700"
+        className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
         aria-label="Pending grading"
         title="Pending grading"
       >
@@ -154,7 +154,7 @@ function ReviewMark({ row }: { row: { pending: boolean; pointsAwarded: number | 
   if (isCorrect) {
     return (
       <span
-        className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-100 text-emerald-700"
+        className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
         aria-label="Correct"
         title="Correct"
       >
@@ -166,7 +166,7 @@ function ReviewMark({ row }: { row: { pending: boolean; pointsAwarded: number | 
   }
   return (
     <span
-      className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-red-100 text-red-700"
+      className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
       aria-label="Incorrect"
       title="Incorrect"
     >

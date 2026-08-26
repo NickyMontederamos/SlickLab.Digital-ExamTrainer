@@ -18,9 +18,9 @@ export function BrandCredit() {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-3 right-3 z-50 flex items-center gap-2 rounded bg-white/80 px-2 py-1 opacity-70 backdrop-blur-sm">
+    <div className="pointer-events-none fixed bottom-3 right-3 z-50 flex items-center gap-2 rounded bg-white/80 px-2 py-1 opacity-70 backdrop-blur-sm dark:bg-slate-900/80">
       <Image src="/branding/slicklab-digital-watermark.png" alt="SlickLab.Digital" width={18} height={18} />
-      <span className="text-xs text-gray-400">Built by SlickLab.Digital</span>
+      <span className="text-xs text-gray-400 dark:text-gray-500">Built by SlickLab.Digital</span>
     </div>
   );
 }

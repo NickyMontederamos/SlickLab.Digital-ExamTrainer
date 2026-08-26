@@ -132,21 +132,21 @@ export function ExamEntryGate({
   if (step === "receipt") {
     return (
       <Card className="flex flex-col gap-3">
-        <h2 className="font-semibold text-slate-900">Booking Confirmed</h2>
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100">Booking Confirmed</h2>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-          <dt className="text-slate-500">Confirmation code</dt>
-          <dd className="font-mono text-slate-900">{confirmationCode}</dd>
-          <dt className="text-slate-500">Exam</dt>
-          <dd className="text-slate-900">{examTitle}</dd>
+          <dt className="text-slate-500 dark:text-slate-400">Confirmation code</dt>
+          <dd className="font-mono text-slate-900 dark:text-slate-100">{confirmationCode}</dd>
+          <dt className="text-slate-500 dark:text-slate-400">Exam</dt>
+          <dd className="text-slate-900 dark:text-slate-100">{examTitle}</dd>
           {scheduledForLabel ? (
             <>
-              <dt className="text-slate-500">Your scheduled time</dt>
-              <dd className="text-slate-900">{scheduledForLabel}</dd>
+              <dt className="text-slate-500 dark:text-slate-400">Your scheduled time</dt>
+              <dd className="text-slate-900 dark:text-slate-100">{scheduledForLabel}</dd>
             </>
           ) : (
             <>
-              <dt className="text-slate-500">Available window</dt>
-              <dd className="text-slate-900">{windowLabel ?? "No fixed window — start anytime"}</dd>
+              <dt className="text-slate-500 dark:text-slate-400">Available window</dt>
+              <dd className="text-slate-900 dark:text-slate-100">{windowLabel ?? "No fixed window — start anytime"}</dd>
             </>
           )}
         </dl>
@@ -161,8 +161,8 @@ export function ExamEntryGate({
     return (
       <Card className="flex flex-col gap-4">
         <div>
-          <h2 className="mb-2 font-semibold text-slate-900">Exam Rules</h2>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600">
+          <h2 className="mb-2 font-semibold text-slate-900 dark:text-slate-100">Exam Rules</h2>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">
             <li>You get one attempt at this exam — there are no retakes.</li>
             <li>The timer starts the moment you begin and cannot be paused.</li>
             <li>Leaving the exam window or switching tabs is logged and limited.</li>
@@ -171,7 +171,7 @@ export function ExamEntryGate({
           </ul>
         </div>
         {error && <Alert tone="error">{error}</Alert>}
-        <label className="flex items-start gap-2 text-sm text-slate-700">
+        <label className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1" />
           I have read and agree to the exam rules above.
         </label>
@@ -184,8 +184,8 @@ export function ExamEntryGate({
 
   return (
     <Card className="flex flex-col items-center gap-3 py-8 text-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-brand-primary" />
-      <p className="text-sm font-medium text-slate-700">{STEP_LABELS[step]}</p>
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-brand-primary dark:border-slate-800" />
+      <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{STEP_LABELS[step]}</p>
     </Card>
   );
 }

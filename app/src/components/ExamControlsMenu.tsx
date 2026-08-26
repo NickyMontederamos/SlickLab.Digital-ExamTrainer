@@ -37,7 +37,7 @@ export function ExamControlsMenu({ submitButtonId }: { submitButtonId: string })
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
       >
         Exam Controls
         <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -47,7 +47,7 @@ export function ExamControlsMenu({ submitButtonId }: { submitButtonId: string })
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-800 dark:bg-slate-900"
         >
           <button
             type="button"
@@ -56,7 +56,7 @@ export function ExamControlsMenu({ submitButtonId }: { submitButtonId: string })
               setOpen(false);
               document.getElementById(submitButtonId)?.click();
             }}
-            className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             Submit Exam
           </button>

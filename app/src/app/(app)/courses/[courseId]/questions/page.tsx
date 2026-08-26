@@ -211,7 +211,7 @@ export default async function CourseQuestionsPage({
                 <Card className="flex flex-col gap-3 ring-2 ring-brand-primary">
                   <input type="hidden" name="questionId" value={question.id} />
                   <input type="hidden" name="type" value={question.type} />
-                  <p className="text-xs text-slate-500">{question.type} (type can&apos;t be changed after creation)</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{question.type} (type can&apos;t be changed after creation)</p>
                   <label className={labelClassName}>
                     Prompt
                     <textarea name="prompt" required rows={2} defaultValue={latest?.prompt} className={inputClassName} />
@@ -245,9 +245,9 @@ export default async function CourseQuestionsPage({
           return (
             <Card key={question.id} className="text-sm">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">{question.type}</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100">{question.type}</span>
                 <span className="flex items-center gap-3">
-                  <span className="text-slate-500">{latest?.points ?? 0} pt(s)</span>
+                  <span className="text-slate-500 dark:text-slate-400">{latest?.points ?? 0} pt(s)</span>
                   {isUnused ? (
                     <>
                       {canUpdate && (
@@ -271,7 +271,7 @@ export default async function CourseQuestionsPage({
                   ) : (
                     (canUpdate || canDelete) && (
                       <span
-                        className="text-xs text-slate-400"
+                        className="text-xs text-slate-400 dark:text-slate-500"
                         title="Already attached to an exam — its wording is locked in for that exam's record"
                       >
                         Used in an exam
@@ -280,7 +280,7 @@ export default async function CourseQuestionsPage({
                   )}
                 </span>
               </div>
-              <p className="mt-1 text-slate-700">{latest?.prompt}</p>
+              <p className="mt-1 text-slate-700 dark:text-slate-300">{latest?.prompt}</p>
             </Card>
           );
         })}

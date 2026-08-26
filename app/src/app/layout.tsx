@@ -25,12 +25,21 @@ export const metadata: Metadata = {
     "Practice environment for College of Maasin — College of Law students to build familiarity with secure digital exam interfaces before sitting official exams. Not affiliated with or endorsed by ExamSoft/ExamSoft Worldwide, LLC.",
 };
 
+// Runs before hydration so the .dark class is already correct on first
+// paint — reading localStorage in a component instead would flash the
+// wrong theme for a frame. Falls back to prefers-color-scheme when the
+// user has never toggled explicitly.
+const THEME_BOOTSTRAP_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");var d=t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <BrandCredit />

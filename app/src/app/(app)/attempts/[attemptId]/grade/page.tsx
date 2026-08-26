@@ -82,7 +82,7 @@ export default async function GradeAttemptPage({ params }: { params: Promise<{ a
         subtitle={
           <>
             Status: {attempt.status}
-            {pendingCount > 0 && <span className="ml-2 text-amber-700">· {pendingCount} question(s) still pending</span>}
+            {pendingCount > 0 && <span className="ml-2 text-amber-700 dark:text-amber-300">· {pendingCount} question(s) still pending</span>}
           </>
         }
       />
@@ -96,13 +96,13 @@ export default async function GradeAttemptPage({ params }: { params: Promise<{ a
           return (
             <Card key={eq.id} className="text-sm">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-slate-900 dark:text-slate-100">
                   Q{i + 1} · {eq.points} pt(s)
                 </span>
                 {answer?.autoGraded && <Badge>Auto-graded</Badge>}
               </div>
-              <p className="mt-1 text-slate-700">{eq.questionVersion.prompt}</p>
-              <p className="mt-2 rounded-lg bg-slate-50 p-2.5 text-sm text-slate-800">{responseText}</p>
+              <p className="mt-1 text-slate-700 dark:text-slate-300">{eq.questionVersion.prompt}</p>
+              <p className="mt-2 rounded-lg bg-slate-50 p-2.5 text-sm text-slate-800 dark:bg-slate-900/60 dark:text-slate-200">{responseText}</p>
 
               {isManual && canGrade ? (
                 <form action={gradeAction} className="mt-3 flex items-center gap-2">
@@ -114,20 +114,20 @@ export default async function GradeAttemptPage({ params }: { params: Promise<{ a
                     min={0}
                     max={eq.points}
                     defaultValue={answer?.pointsAwarded ?? undefined}
-                    className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                    className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-700"
                   />
                   <Button type="submit" className="px-3 py-1.5 text-xs">
                     Save grade
                   </Button>
                 </form>
               ) : isManual ? (
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   {answer?.pointsAwarded === null || answer?.pointsAwarded === undefined
                     ? "Pending grading (view only — your role can't grade)"
                     : `${answer.pointsAwarded} / ${eq.points} (manually graded)`}
                 </p>
               ) : (
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   {answer?.pointsAwarded ?? 0} / {eq.points} (auto-graded)
                 </p>
               )}

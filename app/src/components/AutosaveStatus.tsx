@@ -39,7 +39,7 @@ export function AutosaveStatus({ formId }: { formId: string }) {
   }, [formId]);
 
   return (
-    <p className="inline-flex w-fit items-center gap-1.5 text-xs text-slate-400 tabular-nums" aria-live="polite">
+    <p className="inline-flex w-fit items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 tabular-nums" aria-live="polite">
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
       Autosaves every 60s · last saved {secondsAgo === 0 ? "just now" : `${secondsAgo}s ago`}
     </p>

@@ -36,7 +36,7 @@ export default async function LoginPage({
 
   return (
     <main
-      className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-b from-brand-primary/10 to-slate-50 p-6"
+      className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-b from-brand-primary/10 to-slate-50 dark:to-slate-900 p-6"
       style={brandStyle}
     >
       <div className="flex items-center justify-center gap-4">
@@ -48,9 +48,9 @@ export default async function LoginPage({
         )}
       </div>
       <div className="text-center">
-        <h1 className="text-xl font-semibold text-slate-900">{branding?.name ?? "College of Maasin — College of Law"}</h1>
-        <p className="text-sm text-slate-500">Exam Readiness Trainer</p>
-        <p className="mt-1 text-xs font-medium text-amber-700">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{branding?.name ?? "College of Maasin — College of Law"}</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Exam Readiness Trainer</p>
+        <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
           Practice environment — not the official exam software.
         </p>
       </div>
@@ -82,7 +82,7 @@ export default async function LoginPage({
         </form>
       </Card>
 
-      <p className="text-center text-xs text-slate-400">Phase 1 demo — sign in with a seeded account.</p>
+      <p className="text-center text-xs text-slate-400 dark:text-slate-500">Phase 1 demo — sign in with a seeded account.</p>
     </main>
   );
 }

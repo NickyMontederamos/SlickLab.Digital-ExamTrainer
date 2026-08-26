@@ -69,9 +69,9 @@ export default async function AuditLogPage({
         {entries.length === 0 ? (
           <EmptyState>No audit events match these filters.</EmptyState>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">
                 <tr>
                   <th className="px-4 py-2 font-medium">When</th>
                   <th className="px-4 py-2 font-medium">Actor</th>
@@ -81,24 +81,24 @@ export default async function AuditLogPage({
                   <th className="px-4 py-2 font-medium">Detail</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {entries.map((e) => (
                   <tr key={e.id}>
-                    <td className="whitespace-nowrap px-4 py-2 text-slate-500">
+                    <td className="whitespace-nowrap px-4 py-2 text-slate-500 dark:text-slate-400">
                       {e.createdAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
                     </td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 text-slate-700 dark:text-slate-300">
                       {e.actor?.name ?? (e.metadata as { email?: string } | null)?.email ?? "—"}
                     </td>
-                    <td className="px-4 py-2 font-medium text-slate-900">{e.action}</td>
-                    <td className="px-4 py-2 text-slate-600">
+                    <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{e.action}</td>
+                    <td className="px-4 py-2 text-slate-600 dark:text-slate-400">
                       {e.resourceType}
                       {e.resourceId ? ` · ${e.resourceId.slice(0, 8)}…` : ""}
                     </td>
                     <td className="px-4 py-2">
                       <Badge tone={RESULT_TONE[e.result]}>{e.result}</Badge>
                     </td>
-                    <td className="max-w-xs truncate px-4 py-2 text-xs text-slate-500">
+                    <td className="max-w-xs truncate px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
                       {e.metadata ? JSON.stringify(e.metadata) : ""}
                     </td>
                   </tr>

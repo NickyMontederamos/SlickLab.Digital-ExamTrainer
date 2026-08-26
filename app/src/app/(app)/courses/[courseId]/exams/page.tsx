@@ -80,9 +80,9 @@ export default async function CourseExamsPage({
                   <a href={`/exams/${exam.id}`}>
                     <Card interactive className="flex items-center justify-between">
                       <span className="text-sm">
-                        <span className="font-medium text-slate-900">{exam.title}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{exam.title}</span>
                         {version && (
-                          <span className="text-slate-500">
+                          <span className="text-slate-500 dark:text-slate-400">
                             {" "}
                             · {version.examQuestions.length} question(s) · {version.timeLimitMinutes} min
                           </span>

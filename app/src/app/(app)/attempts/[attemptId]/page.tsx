@@ -117,7 +117,7 @@ export default async function TakeExamPage({ params }: { params: Promise<{ attem
   if (attempt.status === "INTERRUPTED") {
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
-        <h1 className="text-xl font-semibold text-slate-900">{attempt.examVersion.exam.title}</h1>
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{attempt.examVersion.exam.title}</h1>
         <Alert tone="warning">
           Your exam was paused after repeated warnings (leaving the window or exiting fullscreen). A faculty member
           will review your session — you&apos;ll be notified once it&apos;s resolved. Your answers so far are saved.
@@ -182,9 +182,9 @@ export default async function TakeExamPage({ params }: { params: Promise<{ attem
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
-      <div className="flex flex-col gap-2 border-b border-slate-200 pb-4">
+      <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 dark:border-slate-800">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-xl font-semibold text-slate-900">{attempt.examVersion.exam.title}</h1>
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{attempt.examVersion.exam.title}</h1>
           <ExamControlsMenu submitButtonId={SUBMIT_BUTTON_ID} />
         </div>
         <div className="flex items-center gap-3">
@@ -200,15 +200,15 @@ export default async function TakeExamPage({ params }: { params: Promise<{ attem
             const existingRow = answersByQuestion.get(eq.id);
             return (
               <Card key={eq.id} as="fieldset">
-                <legend className="mb-2 flex items-center gap-2 px-1 text-sm font-medium text-slate-900">
+                <legend className="mb-2 flex items-center gap-2 px-1 text-sm font-medium text-slate-900 dark:text-slate-100">
                   <span>
                     Q{index + 1} · {eq.points} pt(s)
                   </span>
                   {existingRow?.isFlagged && <Badge tone="amber">Flagged</Badge>}
                 </legend>
-                <p className="mb-2 text-sm text-slate-700">{eq.questionVersion.prompt}</p>
+                <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">{eq.questionVersion.prompt}</p>
                 {renderInput(eq, existingRow)}
-                <label className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                <label className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                   <input type="checkbox" name={`flag_${eq.id}`} defaultChecked={existingRow?.isFlagged ?? false} />
                   Flag this question to review before submitting
                 </label>

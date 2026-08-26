@@ -79,10 +79,10 @@ export default async function DashboardPage({
               <li key={course.id}>
                 <a href={courseLinkPath ? `/courses/${course.id}/${courseLinkPath}` : `/courses/${course.id}`}>
                   <Card interactive className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-900">
+                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
                       {course.code} — {course.name}
                     </span>
-                    <span className="text-xs text-slate-500">{course.academicYear}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{course.academicYear}</span>
                   </Card>
                 </a>
               </li>

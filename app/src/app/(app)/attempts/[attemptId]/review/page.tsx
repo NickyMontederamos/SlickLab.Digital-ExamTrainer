@@ -81,7 +81,7 @@ export default async function IntegrityReviewPage({ params }: { params: Promise<
                     {EVENT_LABELS[event.type] ?? event.type}
                     {!isStrike && <Badge tone="blue">Context only — not a strike</Badge>}
                   </span>
-                  <span className="text-xs text-slate-500">{event.occurredAt.toLocaleString()}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{event.occurredAt.toLocaleString()}</span>
                 </Card>
               </li>
             );

@@ -71,9 +71,9 @@ export default async function ProctorDashboardPage() {
               <li key={attempt.id}>
                 <Card className="flex items-center justify-between text-sm">
                   <span>
-                    <span className="font-medium text-slate-900">{attempt.student.name}</span>
-                    <span className="text-slate-500"> — {attempt.examVersion.exam.title}</span>
-                    <span className="ml-2 text-xs text-slate-400">Requested {formatTime(attempt.proctorRequestedAt)}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{attempt.student.name}</span>
+                    <span className="text-slate-500 dark:text-slate-400"> — {attempt.examVersion.exam.title}</span>
+                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">Requested {formatTime(attempt.proctorRequestedAt)}</span>
                   </span>
                   <span className="flex items-center gap-2">
                     <form action={approveStartAction}>
@@ -114,9 +114,9 @@ export default async function ProctorDashboardPage() {
               <li key={attempt.id}>
                 <Card className="flex items-center justify-between text-sm">
                   <span>
-                    <span className="font-medium text-slate-900">{attempt.student.name}</span>
-                    <span className="text-slate-500"> — {attempt.examVersion.exam.title}</span>
-                    <span className="ml-2 text-xs text-slate-400">Submitted {formatTime(attempt.submittedAt)}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{attempt.student.name}</span>
+                    <span className="text-slate-500 dark:text-slate-400"> — {attempt.examVersion.exam.title}</span>
+                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">Submitted {formatTime(attempt.submittedAt)}</span>
                   </span>
                   <span className="flex items-center gap-2">
                     <form action={verifySubmissionAction}>
@@ -149,11 +149,11 @@ export default async function ProctorDashboardPage() {
             {booked.map((attempt) => (
               <li key={attempt.id}>
                 <Card className="flex items-center justify-between text-sm">
-                  <span className="text-slate-900">
-                    {attempt.student.name} <span className="text-slate-500">— {attempt.examVersion.exam.title}</span>
+                  <span className="text-slate-900 dark:text-slate-100">
+                    {attempt.student.name} <span className="text-slate-500 dark:text-slate-400">— {attempt.examVersion.exam.title}</span>
                   </span>
                   <span className="flex items-center gap-3">
-                    <span className="text-slate-500">{formatTime(attempt.scheduledFor)}</span>
+                    <span className="text-slate-500 dark:text-slate-400">{formatTime(attempt.scheduledFor)}</span>
                     {canCancel && (
                       <form action={cancelAttemptAction}>
                         <input type="hidden" name="attemptId" value={attempt.id} />

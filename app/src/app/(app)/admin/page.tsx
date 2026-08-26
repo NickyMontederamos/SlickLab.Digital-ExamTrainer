@@ -57,8 +57,8 @@ export default async function AdminPage({
             {institutions.map((institution) => (
               <li key={institution.id}>
                 <Card className="text-sm">
-                  <span className="font-medium text-slate-900">{institution.name}</span>{" "}
-                  <span className="text-slate-500">({institution.slug})</span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100">{institution.name}</span>{" "}
+                  <span className="text-slate-500 dark:text-slate-400">({institution.slug})</span>
                 </Card>
               </li>
             ))}

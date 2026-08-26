@@ -7,10 +7,12 @@
 
 export const BUTTON_VARIANTS = {
   primary: "bg-brand-primary text-white shadow-sm hover:brightness-110 hover:shadow-md focus-visible:brightness-110",
-  secondary: "border border-slate-300 bg-white text-slate-900 shadow-sm hover:bg-slate-50 hover:shadow-md",
+  secondary:
+    "border border-slate-300 bg-white text-slate-900 shadow-sm hover:bg-slate-50 hover:shadow-md " +
+    "dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700",
   danger: "bg-red-700 text-white shadow-sm hover:bg-red-800 hover:shadow-md",
   success: "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 hover:shadow-md",
-  ghost: "text-slate-600 hover:bg-slate-100",
+  ghost: "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800",
 } as const;
 
 export type ButtonVariant = keyof typeof BUTTON_VARIANTS;
