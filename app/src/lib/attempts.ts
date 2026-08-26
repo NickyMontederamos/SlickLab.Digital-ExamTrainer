@@ -69,6 +69,27 @@ export class AttemptExpiredError extends Error {
   }
 }
 
+export class DownloadWindowClosedError extends Error {
+  constructor(attemptId: string) {
+    super(`Attempt ${attemptId} is outside its exam's download window`);
+    this.name = "DownloadWindowClosedError";
+  }
+}
+
+export class DownloadLimitReachedError extends Error {
+  constructor(attemptId: string) {
+    super(`Attempt ${attemptId} has reached its exam's maximum download count`);
+    this.name = "DownloadLimitReachedError";
+  }
+}
+
+export class InvalidAssessmentPasswordError extends Error {
+  constructor(attemptId: string) {
+    super(`Incorrect exam password for attempt ${attemptId}`);
+    this.name = "InvalidAssessmentPasswordError";
+  }
+}
+
 /**
  * The authoritative deadline for an attempt, or null if the timer hasn't
  * started (NOT_STARTED bookings have no deadline — the clock deliberately
@@ -101,6 +122,29 @@ export function isAttemptExpired(
 ): boolean {
   const deadline = attemptDeadline(attempt, timeLimitMinutes);
   return deadline !== null && now.getTime() > deadline.getTime();
+}
+
+/**
+ * Credits back the time an attempt spent paused (INTERRUPTED) onto its
+ * deadline, so a pause never eats into the student's exam time. Shared by
+ * the faculty-review resume path (resolveIntegrityReview in integrity.ts)
+ * and the student self-service resume-code path (resumeAttemptWithCode,
+ * also in integrity.ts) so the math is defined exactly once. Guarded on
+ * both fields the same way the original inline version was: a legacy
+ * attempt paused before these columns existed simply resumes on its
+ * original deadline rather than crashing or silently gaining unlimited
+ * time.
+ */
+export function creditBackPausedTime(
+  expiresAt: Date | null,
+  pausedAt: Date | null,
+  now: Date = new Date()
+): Date | null {
+  if (!expiresAt || !pausedAt) {
+    return expiresAt;
+  }
+  const pausedMs = now.getTime() - pausedAt.getTime();
+  return pausedMs > 0 ? new Date(expiresAt.getTime() + pausedMs) : expiresAt;
 }
 
 /**
@@ -604,4 +648,58 @@ export async function getAttemptResult(institutionId: string, actor: { id: strin
   const scoredPoints = breakdown.reduce((sum, b) => sum + (b.pointsAwarded ?? 0), 0);
 
   return { attempt, breakdown, totalPoints, scoredPoints, isFullyGraded: attempt.status === "GRADED" };
+}
+
+/**
+ * Server-side backing for ExamDownloadGate's password/window/limit ceremony
+ * (Post Assessment Settings, docs/PITCH_ROADMAP.md's Milestone 8 reskin).
+ * Checks downloadStartAt/downloadEndAt and maxDownloads vs the attempt's own
+ * downloadCount, then the password itself. When examVersion.assessmentPassword
+ * is unset (every exam created before this phase), falls back to the
+ * original "any non-empty value unlocks" behavior for backward
+ * compatibility — this only starts gating for real once a faculty member
+ * has actually set a password via Post Assessment Settings.
+ */
+export async function validateAndRecordDownload(
+  institutionId: string,
+  actor: { id: string; role: Role },
+  attemptId: string,
+  passwordAttempt: string
+) {
+  assertCan(actor.role, "exam_attempt", "take");
+
+  const db = forTenant(institutionId);
+
+  const attempt = await db.examAttempt.findFirst({
+    where: { id: attemptId },
+    include: { examVersion: true },
+  });
+  if (!attempt) {
+    throw new AttemptNotFoundError(attemptId);
+  }
+  if (attempt.studentId !== actor.id) {
+    throw new AttemptOwnershipError(attemptId);
+  }
+
+  const v = attempt.examVersion;
+  const now = new Date();
+  if (v.downloadStartAt && now < v.downloadStartAt) {
+    throw new DownloadWindowClosedError(attemptId);
+  }
+  if (v.downloadEndAt && now > v.downloadEndAt) {
+    throw new DownloadWindowClosedError(attemptId);
+  }
+  if (v.maxDownloads != null && attempt.downloadCount >= v.maxDownloads) {
+    throw new DownloadLimitReachedError(attemptId);
+  }
+
+  if (v.assessmentPassword) {
+    if (passwordAttempt !== v.assessmentPassword) {
+      throw new InvalidAssessmentPasswordError(attemptId);
+    }
+  } else if (!passwordAttempt.trim()) {
+    throw new InvalidAssessmentPasswordError(attemptId);
+  }
+
+  await db.examAttempt.update({ where: { id: attemptId }, data: { downloadCount: { increment: 1 } } });
 }

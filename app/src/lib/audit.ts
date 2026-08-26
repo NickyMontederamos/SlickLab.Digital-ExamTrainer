@@ -39,6 +39,7 @@ export const AUDIT_ACTIONS = {
   attemptVerifySubmission: "attempt.verify_submission",
   attemptCancel: "attempt.cancel",
   attemptExpire: "attempt.expire",
+  attemptSelfResume: "attempt.self_resume",
   integrityResolve: "integrity.resolve",
 
   userCreate: "user.create",

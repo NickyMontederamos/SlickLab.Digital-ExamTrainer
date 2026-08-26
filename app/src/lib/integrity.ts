@@ -1,7 +1,7 @@
 import type { AttemptEventType, Role } from "@prisma/client";
 import { assertCan, ForbiddenError } from "./rbac";
 import { forTenant } from "./tenant-db";
-import { AttemptNotFoundError, AttemptOwnershipError } from "./attempts";
+import { AttemptNotFoundError, AttemptOwnershipError, creditBackPausedTime } from "./attempts";
 import { ExamNotFoundError } from "./exams";
 import { AUDIT_ACTIONS, logAudit } from "./audit";
 
@@ -182,12 +182,10 @@ export async function resolveIntegrityReview(
   if (decision === "REINSTATE") {
     // Credit back the time this attempt spent paused, so a review never
     // eats into the student's exam time — least of all one that clears
-    // them. Guarded on both fields: a legacy attempt paused before these
-    // columns existed simply resumes on its original deadline rather than
-    // crashing or silently gaining unlimited time.
+    // them. Shared with resumeAttemptWithCode below via creditBackPausedTime
+    // (attempts.ts) so the math is defined exactly once.
+    const extendedExpiry = creditBackPausedTime(attempt.expiresAt, attempt.pausedAt);
     const pausedMs = attempt.pausedAt ? Date.now() - attempt.pausedAt.getTime() : 0;
-    const extendedExpiry =
-      attempt.expiresAt && pausedMs > 0 ? new Date(attempt.expiresAt.getTime() + pausedMs) : attempt.expiresAt;
 
     const reinstated = await db.examAttempt.update({
       where: { id: attemptId },
@@ -213,4 +211,71 @@ export async function resolveIntegrityReview(
   await auditDecision("TERMINATED");
 
   return terminated;
+}
+
+export class InvalidResumeCodeError extends Error {
+  constructor(attemptId: string) {
+    super(`Incorrect resume code for attempt ${attemptId}`);
+    this.name = "InvalidResumeCodeError";
+  }
+}
+
+/**
+ * Student self-service resume for a paused (INTERRUPTED) attempt, via the
+ * Universal Resume Code a faculty member sets in Post Assessment Settings
+ * (ExamVersion.universalResumeCode). A genuinely different authorization
+ * path from resolveIntegrityReview above: that one is FACULTY-only
+ * (grade:"grade", any attempt); this one is the student themselves
+ * (exam_attempt:"take", their OWN attempt, code must match). No faculty
+ * involvement, by design — this is the "resume without waiting for
+ * review" escape hatch the real product's Universal Resume Code offers
+ * for outage-style scenarios.
+ */
+export async function resumeAttemptWithCode(
+  institutionId: string,
+  actor: { id: string; role: Role },
+  attemptId: string,
+  code: string
+) {
+  assertCan(actor.role, "exam_attempt", "take");
+
+  const db = forTenant(institutionId);
+
+  const attempt = await db.examAttempt.findFirst({
+    where: { id: attemptId },
+    include: { examVersion: true },
+  });
+  if (!attempt) {
+    throw new AttemptNotFoundError(attemptId);
+  }
+  if (attempt.studentId !== actor.id) {
+    throw new AttemptOwnershipError(attemptId);
+  }
+  if (attempt.status !== "INTERRUPTED") {
+    throw new AttemptNotInProgressError(attemptId);
+  }
+
+  const expected = attempt.examVersion.universalResumeCode;
+  if (!expected || code.trim() !== expected) {
+    throw new InvalidResumeCodeError(attemptId);
+  }
+
+  const extendedExpiry = creditBackPausedTime(attempt.expiresAt, attempt.pausedAt);
+
+  const reinstated = await db.examAttempt.update({
+    where: { id: attemptId },
+    data: { status: "IN_PROGRESS", pausedAt: null, expiresAt: extendedExpiry },
+  });
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.attemptSelfResume,
+    resourceType: "exam_attempt",
+    resourceId: attemptId,
+    result: "SUCCESS",
+    metadata: { studentId: actor.id, newExpiresAt: extendedExpiry?.toISOString() ?? null },
+  });
+
+  return reinstated;
 }

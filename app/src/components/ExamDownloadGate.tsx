@@ -15,17 +15,22 @@ const DOWNLOAD_MS = 1500;
  * ExamEntryGate (passed as `children`) exactly as before — this component
  * only adds the download/password ceremony in front of it.
  *
- * There is no real exam package or password here — "download" is a fake
- * progress bar and any non-empty password unlocks it. This is deliberate:
- * the trainer is teaching the INTERACTION PATTERN (download, then wait,
- * then unlock with a password, then see your exam's settings before it
- * starts), not re-implementing encrypted package delivery. Real gating
- * (booking window, proctor approval) is unchanged and still enforced by
- * the code this wraps.
+ * The "download" itself is still a fake progress bar — there's no real
+ * exam package to transfer. But the password IS real once a faculty
+ * member sets one via Post Assessment Settings: submitPassword calls
+ * validateDownloadAction (a server action backed by
+ * validateAndRecordDownload in attempts.ts), which checks it against
+ * ExamVersion.assessmentPassword, the download window, and the download
+ * count cap server-side. An exam with no password set (every exam created
+ * before this phase) keeps the original "any non-empty value unlocks"
+ * behavior for backward compatibility. Real gating (booking window,
+ * proctor approval) is unchanged and still enforced by the code this wraps.
  *
  * Progress persists to localStorage per attempt so a refresh doesn't force
  * the student to redo the ceremony, matching Examplify remembering a
- * downloaded exam across launches.
+ * downloaded exam across launches. remoteDeletionAt is checked here too —
+ * client-side, on render, since no background job scheduler exists in this
+ * project to push a real remote deletion.
  */
 export function ExamDownloadGate({
   attemptId,
@@ -33,6 +38,12 @@ export function ExamDownloadGate({
   timeLimitMinutes,
   questionCount,
   totalPoints,
+  downloadStartAt,
+  downloadEndAt,
+  maxDownloads,
+  downloadCount,
+  remoteDeletionAt,
+  validateDownloadAction,
   children,
 }: {
   attemptId: string;
@@ -40,6 +51,12 @@ export function ExamDownloadGate({
   timeLimitMinutes: number;
   questionCount: number;
   totalPoints: number;
+  downloadStartAt?: number | null;
+  downloadEndAt?: number | null;
+  maxDownloads?: number | null;
+  downloadCount: number;
+  remoteDeletionAt?: number | null;
+  validateDownloadAction: (password: string) => Promise<{ ok: boolean; error?: string }>;
   children: ReactNode;
 }) {
   const storageKey = `examDownload:${attemptId}`;
@@ -47,14 +64,26 @@ export function ExamDownloadGate({
   const [progress, setProgress] = useState(0);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const now = Date.now();
+  const windowNotOpenYet = Boolean(downloadStartAt && now < downloadStartAt);
+  const windowClosed = Boolean(downloadEndAt && now > downloadEndAt);
+  const limitReached = Boolean(maxDownloads != null && downloadCount >= maxDownloads);
+  const downloadBlocked = windowNotOpenYet || windowClosed || limitReached;
 
   // Avoids a hydration mismatch the same way ExamCountdown/ThemeToggle do —
   // localStorage only exists client-side, so the real stage is unknown
   // until mount.
   useEffect(() => {
+    if (remoteDeletionAt && Date.now() > remoteDeletionAt) {
+      window.localStorage.removeItem(storageKey);
+      setStage("not-downloaded");
+      return;
+    }
     const saved = window.localStorage.getItem(storageKey);
     setStage(saved === "unlocked" ? "unlocked" : saved === "downloaded" ? "downloaded" : "not-downloaded");
-  }, [storageKey]);
+  }, [storageKey, remoteDeletionAt]);
 
   useEffect(() => {
     if (stage !== "downloading") return;
@@ -79,13 +108,24 @@ export function ExamDownloadGate({
     setStage("not-downloaded");
   }
 
-  function submitPassword() {
+  async function submitPassword() {
     if (!password.trim()) {
       setError("Enter the exam password to continue.");
       return;
     }
-    window.localStorage.setItem(storageKey, "unlocked");
-    setStage("unlocked");
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await validateDownloadAction(password);
+      if (!result.ok) {
+        setError(result.error ?? "That password wasn't right — try again.");
+        return;
+      }
+      window.localStorage.setItem(storageKey, "unlocked");
+      setStage("unlocked");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (stage === "loading") return null;
@@ -101,9 +141,17 @@ export function ExamDownloadGate({
             take the exam.
           </p>
         </div>
-        <Button type="button" onClick={() => setStage("downloading")} className="self-start">
-          Download Exam
-        </Button>
+        {downloadBlocked ? (
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            {windowNotOpenYet && "Downloads for this exam aren't open yet."}
+            {windowClosed && "The download window for this exam has closed."}
+            {limitReached && "This attempt has reached its maximum number of downloads."}
+          </p>
+        ) : (
+          <Button type="button" onClick={() => setStage("downloading")} className="self-start">
+            Download Exam
+          </Button>
+        )}
       </Card>
     );
   }
@@ -151,7 +199,7 @@ export function ExamDownloadGate({
               className={inputClassName}
             />
           </label>
-          <Button type="button" onClick={submitPassword}>
+          <Button type="button" onClick={submitPassword} disabled={submitting}>
             Enter
           </Button>
         </div>

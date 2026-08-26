@@ -336,6 +336,32 @@ model ExamVersion {
   calculatorAllowed   Boolean  @default(false)
   attachmentsAllowed  Boolean  @default(false)
   securityPolicy      Json?
+  /// Post Assessment Settings (docs reference: ExamSoft's "Post an
+  /// Assessment" faculty workflow). Plaintext, not a real security
+  /// boundary — same honesty posture as ExamDownloadGate's "Non-Secure"
+  /// label. Legacy exams created before this phase have all of these
+  /// null/default, and ExamDownloadGate/validateAndRecordDownload fall
+  /// back to the original permissive behavior when so.
+  assessmentPassword      String?
+  /// Lets a student self-resume their OWN interrupted attempt without
+  /// faculty review — see resumeAttemptWithCode in integrity.ts. Reusable
+  /// (works for every pause of an attempt on this exam), matching the
+  /// "Universal" naming, not single-use.
+  universalResumeCode     String?
+  downloadStartAt         DateTime?
+  downloadEndAt           DateTime?
+  maxDownloads            Int?
+  /// Enforced client-side only, on render — see ExamDownloadGate's
+  /// docstring. No background job scheduler exists in this project to
+  /// push a real remote deletion.
+  remoteDeletionAt        DateTime?
+  /// Stored but inert — there is no meaningful offline/online distinction
+  /// in a web app that already requires network to load the page at all.
+  pingAndRelease          Boolean  @default(false)
+  /// Stored but inert — no email infrastructure exists in this project to
+  /// send a real reminder.
+  sendDownloadEndReminder    Boolean @default(false)
+  sendUploadDeadlineReminder Boolean @default(false)
   createdAt           DateTime @default(now())
 
   examQuestions ExamQuestion[]
@@ -407,6 +433,10 @@ model ExamAttempt {
   gradedAt            DateTime?
   deviceId            String?
   timeRemainingSeconds Int?
+  /// Counts successful unlocks via ExamDownloadGate against
+  /// examVersion.maxDownloads — including re-downloads after "Remove Exam
+  /// Download" (this counts unlock attempts, not distinct devices).
+  downloadCount       Int           @default(0)
   createdAt           DateTime      @default(now())
 
   answers    ExamAnswer[]

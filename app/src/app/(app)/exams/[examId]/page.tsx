@@ -12,12 +12,18 @@ import {
   getExam,
   publishExam,
   QuestionNotFoundError,
+  updatePostAssessmentSettings,
   removeExamQuestion,
   updateExam,
 } from "@/lib/exams";
 import { listQuestionsForCourse } from "@/lib/questions";
 import { importQuestionsFromCsv, QuestionImportValidationError } from "@/lib/question-import";
-import { bookAttempt, findAttemptForStudent, ScheduledTimeOutOfWindowError } from "@/lib/attempts";
+import {
+  bookAttempt,
+  findAttemptForStudent,
+  ScheduledTimeOutOfWindowError,
+  validateAndRecordDownload,
+} from "@/lib/attempts";
 import { beginAttemptAction, checkProctorApprovalAction, requestProctorApprovalAction } from "./actions";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
 
@@ -92,6 +98,24 @@ export default async function ExamBuilderPage({
       revalidatePath(`/exams/${examId}`);
     }
 
+    async function validateDownloadPasswordAction(password: string): Promise<{ ok: boolean; error?: string }> {
+      "use server";
+      const authSession = await auth();
+      if (!authSession?.user?.institutionId || !myAttempt) {
+        return { ok: false, error: "Sign in again and retry." };
+      }
+      try {
+        await validateAndRecordDownload(authSession.user.institutionId, authSession.user, myAttempt.id, password);
+        revalidatePath(`/exams/${examId}`);
+        return { ok: true };
+      } catch (err) {
+        if (err instanceof Error) {
+          return { ok: false, error: err.message };
+        }
+        throw err;
+      }
+    }
+
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
         <PageHeader
@@ -136,6 +160,12 @@ export default async function ExamBuilderPage({
             timeLimitMinutes={version?.timeLimitMinutes ?? 60}
             questionCount={version?.examQuestions.length ?? 0}
             totalPoints={version?.examQuestions.reduce((sum, eq) => sum + eq.points, 0) ?? 0}
+            downloadStartAt={version?.downloadStartAt ? version.downloadStartAt.getTime() : null}
+            downloadEndAt={version?.downloadEndAt ? version.downloadEndAt.getTime() : null}
+            maxDownloads={version?.maxDownloads ?? null}
+            downloadCount={myAttempt.downloadCount}
+            remoteDeletionAt={version?.remoteDeletionAt ? version.remoteDeletionAt.getTime() : null}
+            validateDownloadAction={validateDownloadPasswordAction}
           >
             <ExamEntryGate
               attemptId={myAttempt.id}
@@ -302,6 +332,34 @@ export default async function ExamBuilderPage({
     redirect(`/exams/${examId}?imported=${result.imported}`);
   }
 
+  async function updatePostSettingsAction(formData: FormData) {
+    "use server";
+    const authSession = await auth();
+    if (!authSession?.user?.institutionId) {
+      redirect("/login");
+    }
+
+    const assessmentPassword = String(formData.get("assessmentPassword") ?? "").trim();
+    const universalResumeCode = String(formData.get("universalResumeCode") ?? "").trim();
+    const downloadStartAtRaw = String(formData.get("downloadStartAt") ?? "");
+    const downloadEndAtRaw = String(formData.get("downloadEndAt") ?? "");
+    const maxDownloadsRaw = String(formData.get("maxDownloads") ?? "");
+    const remoteDeletionAtRaw = String(formData.get("remoteDeletionAt") ?? "");
+
+    await updatePostAssessmentSettings(authSession.user.institutionId, authSession.user, examId, {
+      assessmentPassword: assessmentPassword || undefined,
+      universalResumeCode: universalResumeCode || undefined,
+      downloadStartAt: downloadStartAtRaw ? new Date(downloadStartAtRaw) : undefined,
+      downloadEndAt: downloadEndAtRaw ? new Date(downloadEndAtRaw) : undefined,
+      maxDownloads: maxDownloadsRaw ? Number(maxDownloadsRaw) : undefined,
+      remoteDeletionAt: remoteDeletionAtRaw ? new Date(remoteDeletionAtRaw) : undefined,
+      pingAndRelease: formData.get("pingAndRelease") === "on",
+      sendDownloadEndReminder: formData.get("sendDownloadEndReminder") === "on",
+      sendUploadDeadlineReminder: formData.get("sendUploadDeadlineReminder") === "on",
+    });
+    revalidatePath(`/exams/${examId}`);
+  }
+
   async function publishAction() {
     "use server";
     const authSession = await auth();
@@ -385,6 +443,90 @@ export default async function ExamBuilderPage({
               </label>
               <Button type="submit" variant="secondary" className="self-start">
                 Save changes
+              </Button>
+            </form>
+          </Card>
+        </Section>
+      )}
+
+      {canEdit && version && (
+        <Section
+          title="Post Assessment Settings"
+          description="Matches the real product's posting screen. Ping & Release and the email reminder toggles are stored but inert — this app has no email infrastructure to send a real reminder, and there's no meaningful offline/online distinction in a web app that already requires network to load at all."
+        >
+          <Card>
+            <form action={updatePostSettingsAction} className="flex flex-col gap-3">
+              <label className={labelClassName}>
+                Assessment password (optional — any non-empty value unlocks if left blank)
+                <input
+                  name="assessmentPassword"
+                  defaultValue={version.assessmentPassword ?? ""}
+                  className={inputClassName}
+                />
+              </label>
+              <label className={labelClassName}>
+                Universal Resume Code (optional — lets a student self-resume a paused attempt)
+                <input
+                  name="universalResumeCode"
+                  defaultValue={version.universalResumeCode ?? ""}
+                  className={inputClassName}
+                />
+              </label>
+              <label className={labelClassName}>
+                Download start (optional)
+                <input
+                  name="downloadStartAt"
+                  type="datetime-local"
+                  defaultValue={version.downloadStartAt ? toDatetimeLocalValue(version.downloadStartAt) : undefined}
+                  className={inputClassName}
+                />
+              </label>
+              <label className={labelClassName}>
+                Download end (optional)
+                <input
+                  name="downloadEndAt"
+                  type="datetime-local"
+                  defaultValue={version.downloadEndAt ? toDatetimeLocalValue(version.downloadEndAt) : undefined}
+                  className={inputClassName}
+                />
+              </label>
+              <label className={labelClassName}>
+                Maximum downloads (optional)
+                <input
+                  name="maxDownloads"
+                  type="number"
+                  min={1}
+                  defaultValue={version.maxDownloads ?? ""}
+                  className={inputClassName}
+                />
+              </label>
+              <label className={labelClassName}>
+                Remote assessment deletion (optional)
+                <input
+                  name="remoteDeletionAt"
+                  type="datetime-local"
+                  defaultValue={version.remoteDeletionAt ? toDatetimeLocalValue(version.remoteDeletionAt) : undefined}
+                  className={inputClassName}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="pingAndRelease" defaultChecked={version.pingAndRelease} />
+                Ping &amp; Release
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="sendDownloadEndReminder" defaultChecked={version.sendDownloadEndReminder} />
+                Send a reminder for the download end
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  name="sendUploadDeadlineReminder"
+                  defaultChecked={version.sendUploadDeadlineReminder}
+                />
+                Send a reminder for the upload deadline
+              </label>
+              <Button type="submit" variant="secondary" className="self-start">
+                Save post assessment settings
               </Button>
             </form>
           </Card>

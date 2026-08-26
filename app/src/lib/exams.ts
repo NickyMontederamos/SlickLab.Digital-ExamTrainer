@@ -342,6 +342,66 @@ export async function updateExam(institutionId: string, actor: { id: string; rol
   return updatedExam;
 }
 
+export interface UpdatePostAssessmentSettingsInput {
+  assessmentPassword?: string;
+  universalResumeCode?: string;
+  downloadStartAt?: Date;
+  downloadEndAt?: Date;
+  maxDownloads?: number;
+  remoteDeletionAt?: Date;
+  pingAndRelease?: boolean;
+  sendDownloadEndReminder?: boolean;
+  sendUploadDeadlineReminder?: boolean;
+}
+
+/**
+ * Post Assessment Settings — DRAFT-only, same editability rule as
+ * updateExam/addExamQuestion. No unpublish/re-versioning in Phase 1, so
+ * these settings are frozen forever alongside everything else once
+ * published, rather than carving out a special post-publish exception.
+ */
+export async function updatePostAssessmentSettings(
+  institutionId: string,
+  actor: { id: string; role: Role },
+  examId: string,
+  input: UpdatePostAssessmentSettingsInput
+) {
+  assertCan(actor.role, "exam", "update");
+
+  const db = forTenant(institutionId);
+
+  const exam = await db.exam.findFirst({
+    where: { id: examId },
+    include: { versions: { where: { isActive: true }, take: 1 } },
+  });
+  if (!exam) {
+    throw new ExamNotFoundError(examId);
+  }
+  await assertFacultyAssignedToCourse(institutionId, actor, exam.courseId);
+  if (exam.status !== "DRAFT") {
+    throw new ExamNotEditableError(examId);
+  }
+  const activeVersion = exam.versions[0];
+  if (!activeVersion) {
+    throw new ExamNotEditableError(examId);
+  }
+
+  return db.examVersion.update({
+    where: { id: activeVersion.id },
+    data: {
+      assessmentPassword: input.assessmentPassword ?? null,
+      universalResumeCode: input.universalResumeCode ?? null,
+      downloadStartAt: input.downloadStartAt ?? null,
+      downloadEndAt: input.downloadEndAt ?? null,
+      maxDownloads: input.maxDownloads ?? null,
+      remoteDeletionAt: input.remoteDeletionAt ?? null,
+      pingAndRelease: input.pingAndRelease ?? false,
+      sendDownloadEndReminder: input.sendDownloadEndReminder ?? false,
+      sendUploadDeadlineReminder: input.sendUploadDeadlineReminder ?? false,
+    },
+  });
+}
+
 /**
  * Detaches one question from the exam's active version — DRAFT only, same
  * as adding one. Renumbers the remaining questions' `order` so the

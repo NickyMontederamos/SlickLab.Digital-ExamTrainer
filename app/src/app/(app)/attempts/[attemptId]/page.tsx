@@ -16,9 +16,9 @@ import {
   saveAnswers,
   submitAttempt,
 } from "@/lib/attempts";
-import { getWarningCount } from "@/lib/integrity";
+import { getWarningCount, InvalidResumeCodeError, resumeAttemptWithCode } from "@/lib/integrity";
 import { recordIntegrityEventAction } from "./actions";
-import { Alert, Badge, Button, Card, inputClassName } from "@/components/ui";
+import { Alert, Badge, Button, Card, inputClassName, labelClassName } from "@/components/ui";
 
 type AttemptView = Awaited<ReturnType<typeof getAttemptForTaking>>;
 type ExamQuestionView = AttemptView["examVersion"]["examQuestions"][number];
@@ -92,13 +92,20 @@ function renderInput(eq: ExamQuestionView, existingRow: AnswerRow | undefined) {
   return <textarea name={name} defaultValue={existing?.text ?? ""} rows={4} className={`w-full ${inputClassName}`} />;
 }
 
-export default async function TakeExamPage({ params }: { params: Promise<{ attemptId: string }> }) {
+export default async function TakeExamPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ attemptId: string }>;
+  searchParams: Promise<{ resumeError?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id || !session.user.institutionId) {
     redirect("/login");
   }
 
   const { attemptId } = await params;
+  const { resumeError } = await searchParams;
   const institutionId = session.user.institutionId;
 
   let attempt: AttemptView;
@@ -115,6 +122,25 @@ export default async function TakeExamPage({ params }: { params: Promise<{ attem
   }
 
   if (attempt.status === "INTERRUPTED") {
+    async function resumeWithCodeAction(formData: FormData) {
+      "use server";
+      const authSession = await auth();
+      if (!authSession?.user?.id || !authSession.user.institutionId) {
+        redirect("/login");
+      }
+
+      const code = String(formData.get("code") ?? "").trim();
+      try {
+        await resumeAttemptWithCode(authSession.user.institutionId, authSession.user, attemptId, code);
+      } catch (err) {
+        if (err instanceof InvalidResumeCodeError) {
+          redirect(`/attempts/${attemptId}?resumeError=${encodeURIComponent(err.message)}`);
+        }
+        throw err;
+      }
+      revalidatePath(`/attempts/${attemptId}`);
+    }
+
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{attempt.examVersion.exam.title}</h1>
@@ -122,6 +148,25 @@ export default async function TakeExamPage({ params }: { params: Promise<{ attem
           Your exam was paused after repeated warnings (leaving the window or exiting fullscreen). A faculty member
           will review your session — you&apos;ll be notified once it&apos;s resolved. Your answers so far are saved.
         </Alert>
+        {attempt.examVersion.universalResumeCode && (
+          <Card className="flex flex-col gap-3">
+            <div>
+              <h2 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">Have a resume code?</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                If your instructor gave you a resume code (e.g. after an outage affecting multiple students), enter
+                it here to continue without waiting for individual review.
+              </p>
+            </div>
+            {resumeError && <Alert tone="error">{resumeError}</Alert>}
+            <form action={resumeWithCodeAction} className="flex flex-wrap items-end gap-2">
+              <label className={labelClassName}>
+                Resume code
+                <input name="code" required className={inputClassName} />
+              </label>
+              <Button type="submit">Resume exam</Button>
+            </form>
+          </Card>
+        )}
       </main>
     );
   }
