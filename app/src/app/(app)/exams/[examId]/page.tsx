@@ -433,6 +433,11 @@ export default async function ExamBuilderPage({
                 Grading
               </LinkButton>
             )}
+            {can(session.user.role, "grade", "read") && exam.status === "PUBLISHED" && (
+              <LinkButton href={`/exams/${examId}/reporting`} variant="secondary">
+                Reporting
+              </LinkButton>
+            )}
             {hasBenchmarkPostings && (
               <LinkButton href={`/exams/${examId}/benchmark-report`} variant="secondary">
                 Combined Report

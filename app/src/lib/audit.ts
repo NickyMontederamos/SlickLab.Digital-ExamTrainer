@@ -34,6 +34,7 @@ export const AUDIT_ACTIONS = {
   examDuplicate: "exam.duplicate",
 
   gradeAssign: "grade.assign",
+  resultsRelease: "grade.release_results",
 
   attemptApproveStart: "attempt.approve_start",
   attemptVerifySubmission: "attempt.verify_submission",

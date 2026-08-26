@@ -500,6 +500,16 @@ model Submission {
   verifiedAt            DateTime?
   verifiedById          String?
   verifiedBy            User?       @relation("SubmissionVerifiedBy", fields: [verifiedById], references: [id])
+  /// Faculty-controlled "Release Results" timestamp (Reporting article:
+  /// faculty pick which exam-takers receive their Individual Strengths &
+  /// Opportunities report, and when). Purely additive — does NOT replace
+  /// or gate the existing verifiedAt-based result-visibility check in
+  /// getAttemptResult; a student already sees their graded result once
+  /// verified, exactly as before this field existed. This just lets
+  /// releaseResults() (reporting.ts) record a real release event to show
+  /// faculty/students when it happened, without silently hiding results
+  /// that were already visible.
+  resultsReleasedAt     DateTime?
 }
 
 /// WHO / WHAT / WHEN / WHERE / RESULT (master prompt §20). Append-only in
