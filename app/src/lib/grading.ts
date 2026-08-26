@@ -12,9 +12,16 @@ export class AnswerNotFoundError extends Error {
   }
 }
 
-/** Every submitted/graded attempt for an exam, for the faculty grading queue. */
+/**
+ * Every submitted/graded attempt for an exam, for the faculty grading
+ * queue — every student's name and answers, so this gates on the
+ * faculty-tier "grade":"grade" action, not the coarser "grade":"read" that
+ * STUDENT also holds for reading their own single result. (Previously used
+ * "read" with no course-scoping at all, which let any student load any
+ * exam's full grading queue by navigating to its URL directly.)
+ */
 export async function listAttemptsForExam(institutionId: string, actor: { role: Role }, examId: string) {
-  assertCan(actor.role, "grade", "read");
+  assertCan(actor.role, "grade", "grade");
 
   const db = forTenant(institutionId);
 
@@ -82,7 +89,7 @@ export async function getCourseExamSummaries(
   actor: { id: string; role: Role },
   courseId: string
 ): Promise<CourseExamSummary[]> {
-  assertCan(actor.role, "grade", "read");
+  assertCan(actor.role, "grade", "grade");
   await assertFacultyAssignedToCourse(institutionId, actor, courseId);
 
   const db = forTenant(institutionId);

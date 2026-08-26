@@ -17,7 +17,13 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // camera/microphone allowed for this origin only (DeviceAndIdentityCheck's
+  // real ExamID/ExamMonitor getUserMedia call — see that component) — every
+  // other origin, including any third-party iframe, is still denied. A
+  // blanket camera=()/microphone=() here previously blocked that feature
+  // outright in any browser that enforces this header, regardless of the
+  // student granting OS/browser permission.
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
 ];
 

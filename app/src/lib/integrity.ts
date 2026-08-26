@@ -85,9 +85,16 @@ export async function getWarningCount(institutionId: string, attemptId: string) 
   return db.attemptEvent.count({ where: { attemptId, type: { in: STRIKE_EVENT_TYPES } } });
 }
 
-/** Attempts currently paused for integrity review, for the faculty queue. */
+/**
+ * Attempts currently paused for integrity review, for the faculty queue —
+ * exposes other students' names and event trails, so this is faculty/admin
+ * only ("grade":"grade"), matching getIntegrityReview's own explicit
+ * STUDENT exclusion below. (Previously used the coarser "grade":"read",
+ * which STUDENT also holds, with no course-scoping at all — any student
+ * could load any exam's integrity-review queue directly.)
+ */
 export async function listIntegrityReviewsForExam(institutionId: string, actor: { role: Role }, examId: string) {
-  assertCan(actor.role, "grade", "read");
+  assertCan(actor.role, "grade", "grade");
 
   const db = forTenant(institutionId);
 

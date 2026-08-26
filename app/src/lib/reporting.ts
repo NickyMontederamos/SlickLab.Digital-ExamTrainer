@@ -4,12 +4,27 @@ import { forTenant } from "./tenant-db";
 import { ExamNotFoundError } from "./exams";
 import { assertFacultyAssignedToCourse } from "./courses";
 import { averageScorePercent } from "./grading";
+import { AttemptOwnershipError } from "./attempts";
 import { AUDIT_ACTIONS, logAudit } from "./audit";
 
 export class AttemptNotGradedError extends Error {
   constructor(attemptId: string) {
     super(`Attempt ${attemptId} has not been graded yet`);
     this.name = "AttemptNotGradedError";
+  }
+}
+
+/**
+ * A student tried to open their S&O report before faculty released it —
+ * distinct from AttemptOwnershipError (wrong student) or AttemptNotGradedError
+ * (not graded yet). Matches the real product: "if the [View Results] button
+ * does not appear, this means that your results have not been released yet
+ * by the exam maker" (ExamSoft Portal: View Your Exam Results).
+ */
+export class ResultsNotReleasedError extends Error {
+  constructor(attemptId: string) {
+    super(`Results for attempt ${attemptId} have not been released yet`);
+    this.name = "ResultsNotReleasedError";
   }
 }
 
@@ -55,21 +70,21 @@ export interface ExamReportingOverview {
 }
 
 /**
- * The Reporting tab's "Students" list + "Summary" data in one call — real
- * throughout (class average, histogram, low/high all computed from this
- * exam's own graded attempts). "Combined Reporting" (the real product's
- * "Linked Assessment" notification) is handled the same way
- * benchmarks.ts's Combined Report already does: if this exam is itself a
- * linked copy OR a benchmark source, linkedCourseNames lists every course
- * in the group so the Reporting page can show the same notification.
+ * The actual data fetch, deliberately NOT exported. It still calls
+ * assertFacultyAssignedToCourse (correct, real scoping for a FACULTY actor;
+ * a no-op for everyone else — see that function's own docstring), but that
+ * alone is NOT sufficient authorization, since it does nothing to stop a
+ * STUDENT: the shape returned here always includes every student's name and
+ * score, so every caller in this file is responsible for a coarser role
+ * check (or an explicit, independently-verified ownership check) BEFORE
+ * calling this. See getExamReportingOverview and getStudentReportDetail
+ * below for the two legitimate ways in.
  */
-export async function getExamReportingOverview(
+async function fetchReportingOverview(
   institutionId: string,
   actor: { id: string; role: Role },
   examId: string
 ): Promise<ExamReportingOverview> {
-  assertCan(actor.role, "grade", "read");
-
   const db = forTenant(institutionId);
 
   const exam = await db.exam.findFirst({
@@ -151,6 +166,32 @@ export async function getExamReportingOverview(
   };
 }
 
+/**
+ * The Reporting tab's "Students" list + "Summary" data in one call — real
+ * throughout (class average, histogram, low/high all computed from this
+ * exam's own graded attempts). "Combined Reporting" (the real product's
+ * "Linked Assessment" notification) is handled the same way
+ * benchmarks.ts's Combined Report already does: if this exam is itself a
+ * linked copy OR a benchmark source, linkedCourseNames lists every course
+ * in the group so the Reporting page can show the same notification.
+ *
+ * FACULTY/ADMIN ONLY — this returns every student's name and score, so it
+ * gates on the "grade":"grade" action (assigning/managing grades), not the
+ * coarser "grade":"read" that STUDENT also holds for their own result. A
+ * previous version of this function used "read" here, which let any
+ * authenticated student pull any exam's full class roster — see
+ * getStudentReportDetail below for the actual, ownership-scoped path a
+ * student uses to see their own result.
+ */
+export async function getExamReportingOverview(
+  institutionId: string,
+  actor: { id: string; role: Role },
+  examId: string
+): Promise<ExamReportingOverview> {
+  assertCan(actor.role, "grade", "grade");
+  return fetchReportingOverview(institutionId, actor, examId);
+}
+
 export interface StudentReportDetail {
   attemptId: string;
   studentName: string;
@@ -172,6 +213,16 @@ export interface StudentReportDetail {
  * categories to fill that section would misrepresent real data as
  * meaningful groupings. The per-question breakdown below is the honest,
  * more granular equivalent this app actually has.
+ *
+ * Two legitimate callers, two different checks — this is the ExamSoft
+ * Portal's real "View Your Exam Results" split: faculty/admin can open any
+ * student's report in a course they're scoped to (unchanged from before);
+ * a STUDENT may only ever open their OWN attempt, and only once
+ * resultsReleasedAt is actually set ("if the [View Results] button does
+ * not appear, this means that your results have not been released yet by
+ * the exam maker"). Previous/Next navigation across the roster is a
+ * faculty-only affordance — a student's own report never exposes a
+ * classmate's attemptId to browse into.
  */
 export async function getStudentReportDetail(
   institutionId: string,
@@ -179,7 +230,26 @@ export async function getStudentReportDetail(
   examId: string,
   attemptId: string
 ): Promise<StudentReportDetail> {
-  const overview = await getExamReportingOverview(institutionId, actor, examId);
+  if (actor.role === "STUDENT") {
+    const db = forTenant(institutionId);
+    const ownAttempt = await db.examAttempt.findFirst({
+      where: { id: attemptId },
+      select: { studentId: true, submission: { select: { resultsReleasedAt: true } }, examVersion: { select: { examId: true } } },
+    });
+    if (!ownAttempt || ownAttempt.examVersion.examId !== examId) {
+      throw new AttemptNotGradedError(attemptId);
+    }
+    if (ownAttempt.studentId !== actor.id) {
+      throw new AttemptOwnershipError(attemptId);
+    }
+    if (!ownAttempt.submission?.resultsReleasedAt) {
+      throw new ResultsNotReleasedError(attemptId);
+    }
+  } else {
+    assertCan(actor.role, "grade", "grade");
+  }
+
+  const overview = await fetchReportingOverview(institutionId, actor, examId);
   const sorted = [...overview.students]
     .filter((s) => s.isGraded)
     .sort((a, b) => (b.percentCorrect ?? 0) - (a.percentCorrect ?? 0));
@@ -188,6 +258,7 @@ export async function getStudentReportDetail(
     throw new AttemptNotGradedError(attemptId);
   }
   const row = sorted[index];
+  const isStudentCaller = actor.role === "STUDENT";
 
   const db = forTenant(institutionId);
   const attempt = await db.examAttempt.findFirst({
@@ -216,8 +287,8 @@ export async function getStudentReportDetail(
     rank: index + 1,
     totalGradedStudents: sorted.length,
     breakdown,
-    previousAttemptId: index > 0 ? sorted[index - 1].attemptId : null,
-    nextAttemptId: index < sorted.length - 1 ? sorted[index + 1].attemptId : null,
+    previousAttemptId: isStudentCaller || index === 0 ? null : sorted[index - 1].attemptId,
+    nextAttemptId: isStudentCaller || index >= sorted.length - 1 ? null : sorted[index + 1].attemptId,
   };
 }
 
@@ -234,7 +305,7 @@ export async function releaseResults(
   examId: string,
   attemptIds: string[]
 ) {
-  assertCan(actor.role, "grade", "read");
+  assertCan(actor.role, "grade", "grade");
   if (attemptIds.length === 0) {
     return;
   }

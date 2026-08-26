@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AttemptNotFoundError, AttemptOwnershipError, getAttemptResult } from "@/lib/attempts";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { Alert, Card, PageHeader } from "@/components/ui";
+import { Alert, Card, LinkButton, PageHeader } from "@/components/ui";
 
 export default async function AttemptResultPage({
   params,
@@ -62,6 +62,25 @@ export default async function AttemptResultPage({
 
       {result.attempt.status !== "TERMINATED" && result.attempt.submission?.verifiedAt && (
         <UploadConfirmation verifiedAt={result.attempt.submission.verifiedAt} />
+      )}
+
+      {/*
+        ExamSoft Portal: View Your Exam Results — the score above is this
+        app's stand-in for the immediate post-submission screen; the
+        released report (class average, rank, per-question breakdown) is a
+        separate, later step the instructor controls. This link only
+        appears once resultsReleasedAt is actually set — matching the real
+        product exactly ("if the [View Results] button does not appear,
+        this means that your results have not been released yet").
+      */}
+      {result.attempt.submission?.resultsReleasedAt && (
+        <LinkButton
+          href={`/exams/${result.attempt.examVersion.exam.id}/reporting/${result.attempt.id}`}
+          variant="secondary"
+          className="self-start"
+        >
+          View Exam Results
+        </LinkButton>
       )}
 
       {result.attempt.status === "TERMINATED" ? (

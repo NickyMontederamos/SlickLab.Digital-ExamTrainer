@@ -209,7 +209,9 @@ export async function getBenchmarkCombinedReport(
   actor: { role: Role },
   sourceExamId: string
 ): Promise<BenchmarkCombinedReport> {
-  assertCan(actor.role, "grade", "read");
+  // Cross-course aggregate data — faculty/admin only. STUDENT holds
+  // "grade":"read" for their own single result, which is too coarse here.
+  assertCan(actor.role, "grade", "grade");
 
   const db = forTenant(institutionId);
 

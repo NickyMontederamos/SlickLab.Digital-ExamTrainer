@@ -1,12 +1,24 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { ExamNotFoundError } from "@/lib/exams";
-import { AttemptNotGradedError, getStudentReportDetail } from "@/lib/reporting";
+import { AttemptOwnershipError } from "@/lib/attempts";
+import { AttemptNotGradedError, ResultsNotReleasedError, getStudentReportDetail } from "@/lib/reporting";
 import { ForbiddenError } from "@/lib/rbac";
 import { Alert, Card, LinkButton, PageHeader } from "@/components/ui";
 import { PrintButton } from "@/components/PrintButton";
 
-/** The Individual Strengths & Opportunities (S&O) report — Student Overview + per-question breakdown + Previous/Next navigation. */
+/**
+ * The Individual Strengths & Opportunities (S&O) report — Student Overview
+ * + per-question breakdown + Previous/Next navigation (faculty/admin only —
+ * see getStudentReportDetail's docstring).
+ *
+ * Two audiences share this route: FACULTY/ADMIN browsing any student's
+ * report in their course (unchanged), and a STUDENT opening their own
+ * released result — the real product's "ExamSoft Portal: View Your Exam
+ * Results". A student whose results aren't released yet sees a plain
+ * "not released" state here instead of a 404, matching the real product's
+ * own framing rather than looking like a broken link.
+ */
 export default async function StudentReportPage({
   params,
 }: {
@@ -19,15 +31,29 @@ export default async function StudentReportPage({
 
   const { examId, attemptId } = await params;
   const institutionId = session.user.institutionId;
+  const isStudent = session.user.role === "STUDENT";
+  const backHref = isStudent ? `/attempts/${attemptId}/result` : `/exams/${examId}/reporting`;
+  const backLabel = isStudent ? "Your Result" : "Reporting";
 
   let report: Awaited<ReturnType<typeof getStudentReportDetail>>;
   try {
     report = await getStudentReportDetail(institutionId, session.user, examId, attemptId);
   } catch (error) {
+    if (error instanceof ResultsNotReleasedError) {
+      return (
+        <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
+          <PageHeader backHref={backHref} backLabel={backLabel} title="Individual Strengths & Opportunities report" />
+          <Alert tone="info">
+            Your results haven&apos;t been released yet. Check back once your instructor releases them — this page
+            will show your report automatically.
+          </Alert>
+        </main>
+      );
+    }
     if (error instanceof ExamNotFoundError || error instanceof AttemptNotGradedError) {
       notFound();
     }
-    if (error instanceof ForbiddenError) {
+    if (error instanceof ForbiddenError || error instanceof AttemptOwnershipError) {
       redirect("/dashboard");
     }
     throw error;
@@ -36,8 +62,8 @@ export default async function StudentReportPage({
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
       <PageHeader
-        backHref={`/exams/${examId}/reporting`}
-        backLabel="Reporting"
+        backHref={backHref}
+        backLabel={backLabel}
         title="Individual Strengths & Opportunities report"
         subtitle={report.studentName}
         actions={
