@@ -2,6 +2,7 @@ import type { Role } from "@prisma/client";
 import { assertCan } from "./rbac";
 import { forTenant } from "./tenant-db";
 import { DepartmentNotFoundError } from "./departments";
+import { AUDIT_ACTIONS, logAudit } from "./audit";
 
 export class CourseCodeTakenError extends Error {
   constructor(code: string, academicYear: string) {
@@ -105,7 +106,7 @@ export interface CreateCourseInput {
   departmentId: string;
 }
 
-export async function createCourse(institutionId: string, actor: { role: Role }, input: CreateCourseInput) {
+export async function createCourse(institutionId: string, actor: { id: string; role: Role }, input: CreateCourseInput) {
   assertCan(actor.role, "course", "create");
 
   const db = forTenant(institutionId);
@@ -118,7 +119,7 @@ export async function createCourse(institutionId: string, actor: { role: Role },
     throw new CourseCodeTakenError(input.code, input.academicYear);
   }
 
-  return db.course.create({
+  const course = await db.course.create({
     data: {
       code: input.code,
       name: input.name,
@@ -126,6 +127,18 @@ export async function createCourse(institutionId: string, actor: { role: Role },
       departmentId: input.departmentId,
     } as never,
   });
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.courseCreate,
+    resourceType: "course",
+    resourceId: course.id,
+    result: "SUCCESS",
+    metadata: { code: input.code, academicYear: input.academicYear, departmentId: input.departmentId },
+  });
+
+  return course;
 }
 
 /**
@@ -161,7 +174,7 @@ export interface UpdateCourseInput {
   academicYear?: string;
 }
 
-export async function updateCourse(institutionId: string, actor: { role: Role }, courseId: string, input: UpdateCourseInput) {
+export async function updateCourse(institutionId: string, actor: { id: string; role: Role }, courseId: string, input: UpdateCourseInput) {
   assertCan(actor.role, "course", "update");
 
   const db = forTenant(institutionId);
@@ -170,7 +183,19 @@ export async function updateCourse(institutionId: string, actor: { role: Role },
     throw new CourseNotFoundError(courseId);
   }
 
-  return db.course.update({ where: { id: courseId }, data: input });
+  const updated = await db.course.update({ where: { id: courseId }, data: input });
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.courseUpdate,
+    resourceType: "course",
+    resourceId: courseId,
+    result: "SUCCESS",
+    metadata: { input },
+  });
+
+  return updated;
 }
 
 /**
@@ -180,7 +205,7 @@ export async function updateCourse(institutionId: string, actor: { role: Role },
  * common case: created by mistake, or a test/demo course) can be removed
  * cleanly, roster included.
  */
-export async function deleteCourse(institutionId: string, actor: { role: Role }, courseId: string) {
+export async function deleteCourse(institutionId: string, actor: { id: string; role: Role }, courseId: string) {
   assertCan(actor.role, "course", "delete");
 
   const db = forTenant(institutionId);
@@ -201,6 +226,16 @@ export async function deleteCourse(institutionId: string, actor: { role: Role },
     db.courseProctor.deleteMany({ where: { courseId } }),
     db.course.delete({ where: { id: courseId } }),
   ]);
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.courseDelete,
+    resourceType: "course",
+    resourceId: courseId,
+    result: "SUCCESS",
+    metadata: { code: course.code },
+  });
 }
 
 export async function assignFaculty(institutionId: string, actor: { role: Role }, courseId: string, userId: string) {

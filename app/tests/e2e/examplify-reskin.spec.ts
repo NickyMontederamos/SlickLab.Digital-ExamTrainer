@@ -31,6 +31,12 @@ async function login(page: Page, email: string, expectedUrl: RegExp = /dashboard
 /** Runs the entry-gate sequence and waits for a real proctor to approve the request, mirroring exam-lifecycle.spec.ts's proven pattern. Uses a fresh browser CONTEXT for the proctor, not a same-context tab — two logins in one context/cookie-jar silently clobber each other's session. */
 async function bookAndClearGate(page: Page, browser: import("@playwright/test").Browser, title: string) {
   await page.click('button:has-text("Confirm Booking")');
+  // ExamDownloadGate (docs/PITCH_ROADMAP.md Milestone 9) sits between
+  // booking and the entry gate. No assessmentPassword is set on this exam,
+  // so any non-empty value unlocks it.
+  await page.click('button:has-text("Download Exam")');
+  await page.fill('input[type="password"]', "test-password");
+  await page.click('button:has-text("Enter")');
   await expect(page.getByText("Booking Confirmed")).toBeVisible();
   await page.click('button:has-text("Continue to Exam Rules")');
   await page.check('input[type="checkbox"]');
@@ -65,13 +71,37 @@ test.describe.serial("Examplify-style reskin", () => {
       await expect(page.getByText(`${label} — Reskin ${runId}`)).toBeVisible();
     }
 
+    // Exam creation moved into a "Create Assessment" modal during the
+    // faculty portal reskin (docs/PITCH_ROADMAP.md Milestone 9) — the
+    // title/time-limit fields exist inside it, not directly on the page.
     await page.click("text=Exams");
+    // See exam-lifecycle.spec.ts's comment: a click can land before this
+    // freshly-loaded page's client bundle has hydrated (Next.js dev mode
+    // JIT-compiles on first visit), losing the click outright — retry it
+    // until the dialog is actually open, checking first so a delayed-but-
+    // successful click isn't re-clicked into a now-hidden trigger button.
+    const dialog = page.locator("dialog[open]");
+    await expect(async () => {
+      if (!(await dialog.isVisible())) {
+        await page.click('button:has-text("Create Assessment")');
+      }
+      await expect(dialog).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
     await page.fill('input[name="title"]', examTitle);
     await page.fill('input[name="timeLimitMinutes"]', "60");
-    await page.click('button:has-text("Create exam")');
+    // Exact text match, not :has-text — see exam-lifecycle.spec.ts's
+    // comment on the same pattern.
+    await page.click('button:text-is("Create")');
     await expect(page.getByText(examTitle)).toBeVisible();
 
     await page.click(`text=${examTitle}`);
+    // examMonitoringEnabled defaults to true (Milestone 9's real device
+    // check) — turned off so bookAndClearGate below doesn't need real
+    // camera/mic plumbing in the test browser.
+    await page.uncheck('input[name="examMonitoringEnabled"]');
+    await page.click('button:has-text("Save changes")');
+    await expect(page.locator('input[name="examMonitoringEnabled"]')).not.toBeChecked();
+
     for (const label of ["Q1", "Q2"]) {
       await page.selectOption('select[name="questionId"]', { label: `[MULTIPLE_CHOICE] ${label} — Reskin ${runId}` });
       await page.fill('input[name="points"]', "1");
@@ -145,6 +175,18 @@ test.describe.serial("Examplify-style reskin", () => {
       update: {},
       create: { courseId: course.id, userId: student2.id, institutionId: course.institutionId },
     });
+    // Bypasses the install/register-device ceremony (docs/PITCH_ROADMAP.md
+    // Milestone 9) the same way this block already bypasses real account
+    // signup — this test exercises Exam Controls/the result screen, not
+    // device registration, so a direct row is the consistent fixture
+    // pattern rather than walking a real 6-step ceremony unrelated to what's
+    // being tested. Any authenticated STUDENT with no DeviceRegistration row
+    // gets redirected to /register-device before reaching any course page.
+    await platform.deviceRegistration.upsert({
+      where: { userId_deviceFingerprint: { userId: student2.id, deviceFingerprint: `e2e-${runId}` } },
+      update: {},
+      create: { userId: student2.id, institutionId: course.institutionId, deviceFingerprint: `e2e-${runId}` },
+    });
 
     await login(page, student2.email);
     await page.click("text=LAW101");
@@ -153,7 +195,8 @@ test.describe.serial("Examplify-style reskin", () => {
 
     // Answer Q1 with the wrong choice on purpose (seeded choices are
     // "Correct" then "Wrong" — the second radio is always the wrong one).
-    await page.locator('input[type="radio"]').nth(1).check();
+    // Visually hidden (sr-only) — see exam-lifecycle.spec.ts's comment.
+    await page.locator('input[type="radio"]').nth(1).check({ force: true });
 
     // Submit via Exam Controls rather than the bottom button or the
     // last-question swap — this is the path that specifically exercises

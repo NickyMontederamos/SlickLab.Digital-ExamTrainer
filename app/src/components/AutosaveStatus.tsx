@@ -16,11 +16,15 @@ const AUTOSAVE_INTERVAL_MS = 60_000;
  */
 export function AutosaveStatus({ formId }: { formId: string }) {
   const [secondsAgo, setSecondsAgo] = useState(0);
-  const lastSavedRef = useRef(Date.now());
+  // Set inside the effect below, not here — Date.now() is impure and this
+  // component body must stay a pure render function.
+  const lastSavedRef = useRef<number | null>(null);
 
   useEffect(() => {
+    lastSavedRef.current = Date.now();
+
     const displayTimer = window.setInterval(() => {
-      setSecondsAgo(Math.round((Date.now() - lastSavedRef.current) / 1000));
+      setSecondsAgo(Math.round((Date.now() - (lastSavedRef.current ?? Date.now())) / 1000));
     }, 1000);
 
     const saveTimer = window.setInterval(() => {

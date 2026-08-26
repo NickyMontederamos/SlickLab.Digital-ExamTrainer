@@ -843,6 +843,120 @@ red-X mark rendering for a deliberately-wrong answer. Full gate: 168/168 unit,
 
 ---
 
+## Milestone 9 — Faculty portal reskin against the real ExamSoft template, real device checks, and a critical security fix
+
+**Built across several sessions after Milestone 8** (commits `5503b98` through the current
+HEAD) — this section was written retroactively to close a real gap this project's own QA
+pass found: 16 commits had landed with zero entry here. Summarized rather than
+re-narrated commit-by-commit; see `git log` for the full sequence.
+
+**Departments, real Benchmark Assessments, and Post Assessment Settings** (`5503b98`,
+`a8eb294`, `4fe2099`) — a full `Department` model (institution-scoped grouping above
+`Course`), real `LinkedAssessment`-based Benchmark Exams (duplicate a source exam into
+another course, questions locked on the copy, a Combined Report rolling up every posting),
+and Post Assessment Settings (`assessmentPassword`, `universalResumeCode`,
+download-window fields, `remoteDeletionAt`) — all real, faculty-editable ExamVersion
+fields, some (`pingAndRelease`, the email-reminder toggles) explicitly documented as
+stored-but-inert since this app has no email infrastructure or meaningful
+offline/online distinction to act on them.
+
+**Faculty portal reskin** (`f3245db`, `a8f4c3a`) — corrected after live user feedback
+("I BELIEVE YOU DID NOT FOLLOW MY INSTRUCTIONS") that the first pass had substituted the
+app's own simpler card UI instead of literally matching the real ExamSoft Enterprise
+Portal screenshots supplied. Rebuilt against the actual reference: `PortalTable`,
+`Modal`, `CreateDepartmentModal`, `CreateCourseModal`, `DuplicateAssessmentModal`,
+search/filter on the exams table, "Manage your postings" for a benchmark source exam's
+linked copies.
+
+**Student install/register ceremony** (`3bb9741`) — reuses the pre-existing but
+previously-unwired `DeviceRegistration` model. Decorative institution-search/download/
+install screens (honest theater, matching `ExamDownloadGate`'s established pattern), with
+one real action: registering the device to the student's already-authenticated session
+(no second password prompt, since real Examplify's second in-app login has no analog
+worth faking here).
+
+**Exam Results & Reporting** (`3fb7879`) — faculty Students/Summary tabs (real class
+average, histogram, low/high score; a simulated-and-clearly-labeled national average only
+for benchmark-family exams), per-student S&O reports (real rank/class-average/per-question
+breakdown; no fabricated "category performance" since this app has no question-category
+field), and a real Release Results action (`Submission.resultsReleasedAt`) that is
+additive-only and never hides a result a student could already see.
+
+**Prepare-to-Take-an-Exam rebuild** (`b24307a`) — a real Minimum System Requirements
+check (screen resolution and, where the browser reports it, RAM are genuinely measured;
+hard drive space and OS version are honestly labeled "not measurable in a browser" rather
+than faked), and `ExamDownloadGate`'s settings screen rewired from mostly-hardcoded
+placeholders to real `ExamVersion` fields (instructor name via a new `createdBy` join, a
+stable per-exam Posting ID instead of a per-attempt one, Navigate vs. Forward Only from
+`allowBacktracking`, three new real faculty-configurable tool flags —
+`spellCheckAllowed`/`copyPasteAllowed`/`highlightingAllowed`), plus a real optional
+`ExamQuestion.sectionTitle` for multi-section exams.
+
+**Real device checks** (`0271c8f`) — replaced the fully-mocked "device"/"identity"/"room"
+timers from Milestone 4 with `DeviceAndIdentityCheck.tsx`: a genuine
+`navigator.mediaDevices.getUserMedia` permission request, a real live video preview, a
+real microphone level meter (Web Audio API), and a real canvas-captured ExamID photo with
+retake/review. The captured photo is never uploaded or persisted — real ExamID verifies
+against a server-side baseline this trainer has no legitimate reason to hold, so that
+boundary is disclosed directly in the review-step UI. Also dropped the old "room scan"
+mock outright: research into the real product found no separate pre-check room scan
+step exists (ExamMonitor's actual room/environment monitoring is continuous recording
+during the exam, not a pre-flight screen), so it wasn't carried forward as a fabricated
+stand-in for something real Examplify doesn't do either.
+
+**A critical security bug, found by this project's own QA audit and fixed same-day**
+(`c0e7645`) — `reporting.ts`'s `getExamReportingOverview`/`getStudentReportDetail`/
+`releaseResults` gated on the `"grade":"read"` RBAC action, which every STUDENT also holds
+(for reading their own result), and relied on `assertFacultyAssignedToCourse` for
+course-scoping — a documented no-op for any non-FACULTY role. Net effect: any
+authenticated student could navigate directly to `/exams/{any-exam-id}/reporting` and see
+the full class roster, every student's name and score, and a classmate's individual S&O
+report. The identical pattern was also found and fixed in `grading.ts` (the faculty
+grading queue — had *no* course-scoping at all), `integrity.ts` (the integrity-review
+queue — the most sensitive of the four, exposing misconduct event trails), and
+`benchmarks.ts` (combined report). All five now gate on the faculty-tier `"grade":"grade"`
+action instead. `getStudentReportDetail` gained a second, genuinely new and
+correctly-scoped path for a student to see their *own* released result — this is also the
+first real implementation of the ExamSoft Portal's "View Your Exam Results": students
+previously had no way to reach the S&O report at all. Added `reporting.test.ts`
+(nonexistent before this fix — zero test coverage was itself a contributing factor to the
+bug shipping unnoticed), 8 tests including the literal original exploit scenario.
+
+**A second critical fix, same commit**: `next.config.ts`'s `Permissions-Policy` header set
+`camera=(), microphone=()` site-wide, which silently blocked the just-shipped real device
+check in any browser that enforces the header, regardless of OS/browser permission grants.
+Changed to `camera=(self), microphone=(self)` — same-origin only, every third-party frame
+still denied.
+
+**QA audit + Examplify gap analysis** — a full requirements-vs-implementation audit
+(`QA_AUTOMATION_AND_TEST_REPORT.md`, 106 requirement rows) and a feature-parity comparison
+against ExamSoft's real Exam-Makers and Exam-Takers documentation
+(`docs/EXAMPLIFY_GAP_ANALYSIS.md`) were produced this pass — both are living documents,
+not one-off snapshots, and both fed directly into the fixes above.
+
+**Follow-up cleanup, same pass**: course/department create/update/delete now write to the
+audit log (`AUDIT_ACTIONS.courseCreate`/etc. already existed but were never called;
+`department.*` actions added); `allowBacktracking`, `randomizeQuestions`, and
+`randomizeAnswers` — real `ExamVersion` fields that had been stored since early in this
+project's history but had zero effect on the exam-taking UI — are now actually enforced:
+`ExamQuestionPager` disables Previous and any palette jump into an already-passed question
+when `allowBacktracking` is false, and question/choice display order is shuffled via a new
+deterministic, attempt-seeded `seededShuffle()` (`src/lib/shuffle.ts`) when the
+corresponding randomize flag is on — presentation-only, so grading (which matches on
+`examQuestionId`/choice id, never position) is unaffected.
+
+**Verified:** `npx tsc --noEmit`, `npx eslint .`, `npm run build` clean throughout this
+whole pass. `npm test` climbed from 168 to 180 across the pass (new `reporting.test.ts`,
+`shuffle.test.ts`, and courses/departments audit-logging coverage). Each individual feature
+was also live-verified against the real dev server as it landed — see the corresponding
+commit messages for the specific click-through each one covered, including a direct live
+reproduction of the original reporting exploit (a second student attempting to read the
+first student's released report → correctly denied) after the fix. `npx playwright test`
+(E2E) has **not** been re-run across this whole pass — flagged as a real, outstanding
+verification gap in `QA_AUTOMATION_AND_TEST_REPORT.md` rather than assumed passing.
+
+---
+
 ## Working agreement for this plan
 
 - Each milestone should be verified live in the browser and covered by tests

@@ -52,12 +52,26 @@ export const AUDIT_ACTIONS = {
   courseUpdate: "course.update",
   courseDelete: "course.delete",
   rosterImport: "roster.import",
+
+  departmentCreate: "department.create",
+  departmentUpdate: "department.update",
+  departmentDelete: "department.delete",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 
 /** Prefix groups for the audit viewer's filter, so the UI and the writers agree on what's greppable. */
-export const AUDIT_ACTION_PREFIXES = ["auth.", "exam.", "grade.", "attempt.", "integrity.", "user.", "course.", "roster."] as const;
+export const AUDIT_ACTION_PREFIXES = [
+  "auth.",
+  "exam.",
+  "grade.",
+  "attempt.",
+  "integrity.",
+  "user.",
+  "course.",
+  "roster.",
+  "department.",
+] as const;
 
 /**
  * WHO / WHAT / WHEN / WHERE / RESULT (master prompt §20). Always writes

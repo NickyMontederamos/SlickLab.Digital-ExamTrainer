@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { assertCan } from "./rbac";
 import { forTenant } from "./tenant-db";
+import { AUDIT_ACTIONS, logAudit } from "./audit";
 
 export class DepartmentNameTakenError extends Error {
   constructor(name: string) {
@@ -49,7 +50,7 @@ export interface CreateDepartmentInput {
   name: string;
 }
 
-export async function createDepartment(institutionId: string, actor: { role: Role }, input: CreateDepartmentInput) {
+export async function createDepartment(institutionId: string, actor: { id: string; role: Role }, input: CreateDepartmentInput) {
   assertCan(actor.role, "department", "create");
 
   const db = forTenant(institutionId);
@@ -58,7 +59,19 @@ export async function createDepartment(institutionId: string, actor: { role: Rol
     throw new DepartmentNameTakenError(input.name);
   }
 
-  return db.department.create({ data: { name: input.name } as never });
+  const department = await db.department.create({ data: { name: input.name } as never });
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.departmentCreate,
+    resourceType: "department",
+    resourceId: department.id,
+    result: "SUCCESS",
+    metadata: { name: input.name },
+  });
+
+  return department;
 }
 
 export interface UpdateDepartmentInput {
@@ -67,7 +80,7 @@ export interface UpdateDepartmentInput {
 
 export async function updateDepartment(
   institutionId: string,
-  actor: { role: Role },
+  actor: { id: string; role: Role },
   departmentId: string,
   input: UpdateDepartmentInput
 ) {
@@ -79,7 +92,19 @@ export async function updateDepartment(
     throw new DepartmentNotFoundError(departmentId);
   }
 
-  return db.department.update({ where: { id: departmentId }, data: input });
+  const updated = await db.department.update({ where: { id: departmentId }, data: input });
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.departmentUpdate,
+    resourceType: "department",
+    resourceId: departmentId,
+    result: "SUCCESS",
+    metadata: { input },
+  });
+
+  return updated;
 }
 
 /**
@@ -87,7 +112,7 @@ export async function updateDepartment(
  * same reasoning as deleteCourse's block-if-has-content in courses.ts.
  * Reassign or delete those courses first.
  */
-export async function deleteDepartment(institutionId: string, actor: { role: Role }, departmentId: string) {
+export async function deleteDepartment(institutionId: string, actor: { id: string; role: Role }, departmentId: string) {
   assertCan(actor.role, "department", "delete");
 
   const db = forTenant(institutionId);
@@ -103,4 +128,14 @@ export async function deleteDepartment(institutionId: string, actor: { role: Rol
   }
 
   await db.department.delete({ where: { id: departmentId } });
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id,
+    action: AUDIT_ACTIONS.departmentDelete,
+    resourceType: "department",
+    resourceId: departmentId,
+    result: "SUCCESS",
+    metadata: { name: department.name },
+  });
 }

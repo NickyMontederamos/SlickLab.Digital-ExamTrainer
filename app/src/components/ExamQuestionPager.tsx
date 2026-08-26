@@ -35,15 +35,28 @@ export function ExamQuestionPager({
   questions,
   children,
   submitButtonId,
+  allowBacktracking = true,
 }: {
   questions: QuestionPagerMeta[];
   children: ReactNode[];
   submitButtonId: string;
+  /** ExamVersion.allowBacktracking — when false, a question can't be revisited once left behind. Real enforcement: the Previous button and any palette jump to an earlier question are disabled, not just hidden. */
+  allowBacktracking?: boolean;
 }) {
-  const [active, setActive] = useState(0);
+  const [active, setActiveRaw] = useState(0);
+  // Highest index ever visited — the actual "no backtracking" boundary.
+  // Tracking this separately from `active` (rather than just disabling
+  // Previous) is what stops a direct palette jump back into an earlier
+  // question too, not just the linear Previous button.
+  const [maxVisited, setMaxVisited] = useState(0);
   const [filter, setFilter] = useState<PagerFilter>("all");
   const total = questions.length;
   const isLastQuestion = active === total - 1;
+
+  function setActive(index: number) {
+    setActiveRaw(index);
+    setMaxVisited((m) => Math.max(m, index));
+  }
 
   const visible = questions
     .map((q, i) => ({ q, i }))
@@ -75,27 +88,34 @@ export function ExamQuestionPager({
         {visible.length === 0 ? (
           <p className="text-xs text-slate-400 dark:text-slate-500">No questions match this filter.</p>
         ) : (
-          visible.map(({ q, i }) => (
-            <button
-              key={q.id}
-              type="button"
-              onClick={() => setActive(i)}
-              aria-current={i === active}
-              className={
-                "relative h-8 w-8 rounded-lg border text-xs font-medium transition-colors " +
-                (i === active
-                  ? "border-brand-primary bg-brand-primary text-white"
-                  : q.answered
-                    ? "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                    : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800")
-              }
-            >
-              {i + 1}
-              {q.flagged && (
-                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-400" aria-label="Flagged" />
-              )}
-            </button>
-          ))
+          visible.map(({ q, i }) => {
+            const locked = !allowBacktracking && i < maxVisited;
+            return (
+              <button
+                key={q.id}
+                type="button"
+                onClick={() => !locked && setActive(i)}
+                disabled={locked}
+                title={locked ? "Backward navigation is disabled for this exam" : undefined}
+                aria-current={i === active}
+                className={
+                  "relative h-8 w-8 rounded-lg border text-xs font-medium transition-colors " +
+                  (locked
+                    ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-700"
+                    : i === active
+                      ? "border-brand-primary bg-brand-primary text-white"
+                      : q.answered
+                        ? "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        : "border-slate-300 bg-white text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800")
+                }
+              >
+                {i + 1}
+                {q.flagged && (
+                  <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-amber-400" aria-label="Flagged" />
+                )}
+              </button>
+            );
+          })
         )}
       </div>
 
@@ -109,8 +129,9 @@ export function ExamQuestionPager({
         <Button
           type="button"
           variant="secondary"
-          onClick={() => setActive((i) => Math.max(0, i - 1))}
-          disabled={active === 0}
+          onClick={() => setActive(Math.max(0, active - 1))}
+          disabled={active === 0 || !allowBacktracking}
+          title={!allowBacktracking && active > 0 ? "Backward navigation is disabled for this exam" : undefined}
         >
           ← Previous
         </Button>
@@ -122,7 +143,7 @@ export function ExamQuestionPager({
             Submit →
           </Button>
         ) : (
-          <Button type="button" variant="secondary" onClick={() => setActive((i) => Math.min(total - 1, i + 1))}>
+          <Button type="button" variant="secondary" onClick={() => setActive(Math.min(total - 1, active + 1))}>
             Next →
           </Button>
         )}

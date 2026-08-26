@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
@@ -95,9 +96,9 @@ export default async function DepartmentCoursesPage({
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6">
       <div>
         <nav className="mb-1 text-xs text-slate-500 dark:text-slate-400">
-          <a href="/departments" className="hover:text-brand-primary hover:underline">
+          <Link href="/departments" className="hover:text-brand-primary hover:underline">
             {department.name}
-          </a>{" "}
+          </Link>{" "}
           / My Courses
         </nav>
         <PageHeader

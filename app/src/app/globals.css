@@ -21,6 +21,37 @@
   --foreground: #f1f5f9;
 }
 
+/*
+ * Proctor's role-default theme (see (app)/layout.tsx's THEME_BOOTSTRAP_SCRIPT)
+ * — a third, distinct visual mode, not just a shade of light: neutral grey
+ * surfaces throughout, same brand accent color as every other theme (only
+ * --background/--foreground change here, --brand-primary/--brand-secondary
+ * are deliberately untouched). Applied as an attribute on <html>, same
+ * pattern as the .dark class, so it can coexist with the same `dark:`
+ * variant machinery without colliding — a grey-themed page never also
+ * carries the .dark class (the bootstrap script and ThemeToggle both keep
+ * the two mutually exclusive).
+ *
+ * The two utility classes overridden below (bg-white, bg-slate-50) are the
+ * light-mode surface color used pervasively by the shared design system
+ * (Card, inputClassName, EmptyState in ui.tsx) and by most hand-rolled
+ * markup elsewhere — overriding them here, at higher specificity than the
+ * bare utility class, reskins nearly every card/surface in the app to grey
+ * without editing each of those call sites individually.
+ */
+[data-theme="grey"] {
+  --background: #e4e6ea;
+  --foreground: #1e2328;
+}
+
+html[data-theme="grey"] .bg-white {
+  background-color: #f1f2f4;
+}
+
+html[data-theme="grey"] .bg-slate-50 {
+  background-color: #eceef1;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

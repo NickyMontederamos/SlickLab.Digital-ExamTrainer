@@ -59,7 +59,10 @@ test("still serves the baseline security headers alongside the CSP", async ({ pa
   expect(headers["x-content-type-options"]).toBe("nosniff");
   expect(headers["x-frame-options"]).toBe("DENY");
   expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
-  expect(headers["permissions-policy"]).toContain("camera=()");
+  // Same-origin only (not a blanket deny) as of Milestone 9's real
+  // ExamID/ExamMonitor device check, which needs camera/mic access on this
+  // origin — see next.config.ts.
+  expect(headers["permissions-policy"]).toContain("camera=(self)");
   expect(headers["strict-transport-security"]).toContain("max-age=");
 });
 

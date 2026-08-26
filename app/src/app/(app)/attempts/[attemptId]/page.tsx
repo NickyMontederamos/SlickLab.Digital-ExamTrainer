@@ -1,7 +1,9 @@
 import type { Prisma, QuestionType } from "@prisma/client";
+import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { getDemoInstitutionBranding } from "@/lib/branding";
 import { AutosaveStatus } from "@/components/AutosaveStatus";
 import { ExamCountdown } from "@/components/ExamCountdown";
 import { ExamControlsMenu } from "@/components/ExamControlsMenu";
@@ -17,6 +19,7 @@ import {
   submitAttempt,
 } from "@/lib/attempts";
 import { getWarningCount, InvalidResumeCodeError, resumeAttemptWithCode } from "@/lib/integrity";
+import { seededShuffle } from "@/lib/shuffle";
 import { recordIntegrityEventAction } from "./actions";
 import { Alert, Badge, Button, Card, inputClassName, labelClassName } from "@/components/ui";
 
@@ -55,34 +58,75 @@ function readAnswersFromForm(examQuestions: ExamQuestionView[], formData: FormDa
     .filter((a) => a.responseJson !== null || a.isFlagged);
 }
 
-function renderInput(eq: ExamQuestionView, existingRow: AnswerRow | undefined) {
+const CHOICE_LETTERS = "ABCDEFGHIJ".split("");
+
+/**
+ * Pill-style choice rows with a lettered badge and a checkmark on the
+ * selected one — matches PAGE TEMPLATE/Student Overview_Exam/MultipleChoice.jpg.
+ * The pill border/background and the checkmark's visibility are pure CSS
+ * (`has-checked:` / `hidden group-has-checked:block`), not JavaScript — the
+ * native radio/checkbox still drives it, so clicking a different choice
+ * updates the highlight immediately, before any Save Progress round trip,
+ * unlike the "Currently Selected" text line above these rows (that one's
+ * server-rendered text, so it only reflects the last-saved state, same
+ * documented limitation as the Flagged badge elsewhere on this page).
+ */
+function ChoicePill({ letter, text, children }: { letter: string; text: string; children: React.ReactNode }) {
+  return (
+    <label className="group flex cursor-pointer items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 transition-colors hover:bg-slate-100 has-checked:border-brand-primary has-checked:bg-brand-primary/5 has-checked:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:has-checked:text-slate-100">
+      {children}
+      <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-current text-xs font-semibold">
+        {letter}
+      </span>
+      <span className="flex-1">{text}</span>
+      <svg viewBox="0 0 20 20" fill="currentColor" className="hidden h-4 w-4 flex-none text-brand-primary group-has-checked:block">
+        <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.4 7.4a1 1 0 01-1.4 0L3.3 9.5a1 1 0 111.4-1.4l3.9 3.9 6.7-6.7a1 1 0 011.4 0z" clipRule="evenodd" />
+      </svg>
+    </label>
+  );
+}
+
+function renderInput(eq: ExamQuestionView, existingRow: AnswerRow | undefined, choices: { id: string; text: string }[]) {
   const existing = existingRow?.responseJson as AnswerShape | undefined;
-  const choices = (eq.questionVersion.choices as { id: string; text: string }[] | null) ?? [];
   const name = `answer_${eq.id}`;
 
   if (eq.question.type === "MULTIPLE_CHOICE" || eq.question.type === "TRUE_FALSE") {
     const selected = existing?.choiceIds?.[0];
+    const selectedLetters = choices
+      .map((c, i) => (c.id === selected ? CHOICE_LETTERS[i] : null))
+      .filter((l): l is string => l !== null);
     return (
-      <div className="flex flex-col gap-1">
-        {choices.map((c) => (
-          <label key={c.id} className="flex items-center gap-2 text-sm">
-            <input type="radio" name={name} value={c.id} defaultChecked={selected === c.id} />
-            {c.text}
-          </label>
-        ))}
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Currently Selected: {selectedLetters.length > 0 ? selectedLetters.join(", ") : "—"}
+        </p>
+        <div className="flex flex-col gap-2">
+          {choices.map((c, i) => (
+            <ChoicePill key={c.id} letter={CHOICE_LETTERS[i]} text={c.text}>
+              <input type="radio" name={name} value={c.id} defaultChecked={c.id === selected} className="sr-only" />
+            </ChoicePill>
+          ))}
+        </div>
       </div>
     );
   }
   if (eq.question.type === "MULTIPLE_RESPONSE") {
     const selectedIds = existing?.choiceIds ?? [];
+    const selectedLetters = choices
+      .map((c, i) => (selectedIds.includes(c.id) ? CHOICE_LETTERS[i] : null))
+      .filter((l): l is string => l !== null);
     return (
-      <div className="flex flex-col gap-1">
-        {choices.map((c) => (
-          <label key={c.id} className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name={name} value={c.id} defaultChecked={selectedIds.includes(c.id)} />
-            {c.text}
-          </label>
-        ))}
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Currently Selected: {selectedLetters.length > 0 ? selectedLetters.join(", ") : "—"}
+        </p>
+        <div className="flex flex-col gap-2">
+          {choices.map((c, i) => (
+            <ChoicePill key={c.id} letter={CHOICE_LETTERS[i]} text={c.text}>
+              <input type="checkbox" name={name} value={c.id} defaultChecked={selectedIds.includes(c.id)} className="sr-only" />
+            </ChoicePill>
+          ))}
+        </div>
       </div>
     );
   }
@@ -195,8 +239,14 @@ export default async function TakeExamPage({
   }
 
   const answersByQuestion = new Map(attempt.answers.map((a) => [a.examQuestionId, a]));
-  const examQuestions = attempt.examVersion.examQuestions;
+  // Presentation-only reorder — see shuffle.ts. Seeded by attemptId so the
+  // order is stable across reloads of the same attempt, not the exam's
+  // authored order every other exam question list in this app uses.
+  const examQuestions = attempt.examVersion.randomizeQuestions
+    ? seededShuffle(attempt.examVersion.examQuestions, `${attemptId}:questions`)
+    : attempt.examVersion.examQuestions;
   const warningCount = await getWarningCount(institutionId, attemptId);
+  const branding = await getDemoInstitutionBranding();
   const questionMeta: QuestionPagerMeta[] = examQuestions.map((eq) => {
     const row = answersByQuestion.get(eq.id);
     return { id: eq.id, flagged: row?.isFlagged ?? false, answered: row?.responseJson != null };
@@ -229,7 +279,12 @@ export default async function TakeExamPage({
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
       <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 dark:border-slate-800">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{attempt.examVersion.exam.title}</h1>
+          <div className="flex items-center gap-2.5">
+            {branding?.sealUrl && (
+              <Image src={branding.sealUrl} alt="College of Maasin seal" width={28} height={28} className="rounded-full" />
+            )}
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{attempt.examVersion.exam.title}</h1>
+          </div>
           <ExamControlsMenu submitButtonId={SUBMIT_BUTTON_ID} />
         </div>
         <div className="flex items-center gap-3">
@@ -240,9 +295,11 @@ export default async function TakeExamPage({
       </div>
 
       <form id={ANSWERS_FORM_ID} action={saveProgressAction} className="flex flex-col gap-6">
-        <ExamQuestionPager questions={questionMeta} submitButtonId={SUBMIT_BUTTON_ID}>
-          {attempt.examVersion.examQuestions.map((eq, index) => {
+        <ExamQuestionPager questions={questionMeta} submitButtonId={SUBMIT_BUTTON_ID} allowBacktracking={attempt.examVersion.allowBacktracking}>
+          {examQuestions.map((eq, index) => {
             const existingRow = answersByQuestion.get(eq.id);
+            const rawChoices = (eq.questionVersion.choices as { id: string; text: string }[] | null) ?? [];
+            const choices = attempt.examVersion.randomizeAnswers ? seededShuffle(rawChoices, `${attemptId}:${eq.id}:choices`) : rawChoices;
             return (
               <Card key={eq.id} as="fieldset">
                 <legend className="mb-2 flex items-center gap-2 px-1 text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -252,7 +309,7 @@ export default async function TakeExamPage({
                   {existingRow?.isFlagged && <Badge tone="amber">Flagged</Badge>}
                 </legend>
                 <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">{eq.questionVersion.prompt}</p>
-                {renderInput(eq, existingRow)}
+                {renderInput(eq, existingRow, choices)}
                 <label className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                   <input type="checkbox" name={`flag_${eq.id}`} defaultChecked={existingRow?.isFlagged ?? false} />
                   Flag this question to review before submitting

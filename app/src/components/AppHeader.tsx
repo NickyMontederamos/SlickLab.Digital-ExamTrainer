@@ -48,7 +48,7 @@ export async function AppHeader() {
               <Image src={branding.sealUrl} alt="College of Maasin seal" width={40} height={40} className="rounded-full" />
             )}
             {branding?.logoUrl && (
-              <Image src={branding.logoUrl} alt="College of Law crest" width={34} height={40} className="h-auto w-[34px]" />
+              <Image src={branding.logoUrl} alt="College of Law crest" width={34} height={34} className="h-auto w-[34px]" />
             )}
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {branding?.name ?? "College of Maasin — College of Law"}
@@ -93,7 +93,7 @@ export async function AppHeader() {
               </form>
             </>
           )}
-          <ThemeToggle />
+          <ThemeToggle role={session?.user?.role} />
         </div>
       </div>
     </header>

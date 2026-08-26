@@ -145,7 +145,10 @@ export function ExamDownloadGate({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const now = Date.now();
+  // Lazy useState initializer, not a bare Date.now() call in the render
+  // body — React's purity rule allows this specific escape hatch since the
+  // initializer only ever runs once, on mount.
+  const [now] = useState(() => Date.now());
   const windowNotOpenYet = Boolean(downloadStartAt && now < downloadStartAt);
   const windowClosed = Boolean(downloadEndAt && now > downloadEndAt);
   const limitReached = Boolean(maxDownloads != null && downloadCount >= maxDownloads);
@@ -165,13 +168,16 @@ export function ExamDownloadGate({
   // window.screen/localStorage only exist client-side, so the real stage is
   // unknown until mount.
   useEffect(() => {
-    const { rows, allMet } = checkSystemRequirements();
-    if (!allMet) {
-      setRequirementRows(rows);
-      setStage("system-check");
-      return;
+    function runInitialCheck() {
+      const { rows, allMet } = checkSystemRequirements();
+      if (!allMet) {
+        setRequirementRows(rows);
+        setStage("system-check");
+        return;
+      }
+      resumeAfterSystemCheck();
     }
-    resumeAfterSystemCheck();
+    runInitialCheck();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, remoteDeletionAt]);
 

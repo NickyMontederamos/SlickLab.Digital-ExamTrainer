@@ -22,6 +22,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
   let institutionA: { id: string };
   let institutionB: { id: string };
   let departmentA: { id: string };
+  let adminA: { id: string };
   let facultyA: { id: string };
   let proctorA: { id: string };
   let studentA: { id: string };
@@ -37,6 +38,9 @@ describe("course management (INSTITUTION_ADMIN)", () => {
     });
     departmentA = await platform.department.create({
       data: { institutionId: institutionA.id, name: `Department A ${runId}` },
+    });
+    adminA = await platform.user.create({
+      data: { institutionId: institutionA.id, email: `course-admin-${runId}@test.local`, name: "Admin A", role: "INSTITUTION_ADMIN", passwordHash: "x" },
     });
     facultyA = await platform.user.create({
       data: { institutionId: institutionA.id, email: `course-faculty-${runId}@test.local`, name: "Faculty A", role: "FACULTY", passwordHash: "x" },
@@ -65,7 +69,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
   });
 
   it("creates a course", async () => {
-    const course = await createCourse(institutionA.id, { role: "INSTITUTION_ADMIN" }, {
+    const course = await createCourse(institutionA.id, { id: adminA.id, role: "INSTITUTION_ADMIN" }, {
       code: "LAW999",
       name: "Test Course",
       academicYear: "2026-2027",
@@ -76,7 +80,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
 
   it("refuses a duplicate course code for the same academic year", async () => {
     await expect(
-      createCourse(institutionA.id, { role: "INSTITUTION_ADMIN" }, {
+      createCourse(institutionA.id, { id: adminA.id, role: "INSTITUTION_ADMIN" }, {
         code: "LAW999",
         name: "Duplicate",
         academicYear: "2026-2027",
@@ -87,7 +91,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
 
   it("refuses course creation for roles without permission", async () => {
     await expect(
-      createCourse(institutionA.id, { role: "FACULTY" }, {
+      createCourse(institutionA.id, { id: facultyA.id, role: "FACULTY" }, {
         code: "LAW998",
         name: "Nope",
         academicYear: "2026-2027",
@@ -150,7 +154,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
     const courses = await forPlatform().course.findMany({ where: { institutionId: institutionA.id, code: "LAW999" } });
     const courseId = courses[0].id;
 
-    const updated = await updateCourse(institutionA.id, { role: "INSTITUTION_ADMIN" }, courseId, { name: "Renamed Course" });
+    const updated = await updateCourse(institutionA.id, { id: adminA.id, role: "INSTITUTION_ADMIN" }, courseId, { name: "Renamed Course" });
     expect(updated.name).toBe("Renamed Course");
   });
 
@@ -167,14 +171,14 @@ describe("course management (INSTITUTION_ADMIN)", () => {
   });
 
   it("deletes an empty course", async () => {
-    const empty = await createCourse(institutionA.id, { role: "INSTITUTION_ADMIN" }, {
+    const empty = await createCourse(institutionA.id, { id: adminA.id, role: "INSTITUTION_ADMIN" }, {
       code: "LAW777",
       name: "Empty Course",
       academicYear: "2026-2027",
       departmentId: departmentA.id,
     });
 
-    await deleteCourse(institutionA.id, { role: "INSTITUTION_ADMIN" }, empty.id);
+    await deleteCourse(institutionA.id, { id: adminA.id, role: "INSTITUTION_ADMIN" }, empty.id);
 
     const stillExists = await forPlatform().course.findUnique({ where: { id: empty.id } });
     expect(stillExists).toBeNull();
@@ -195,7 +199,7 @@ describe("course management (INSTITUTION_ADMIN)", () => {
       },
     });
 
-    await expect(deleteCourse(institutionA.id, { role: "INSTITUTION_ADMIN" }, courseId)).rejects.toThrow(
+    await expect(deleteCourse(institutionA.id, { id: adminA.id, role: "INSTITUTION_ADMIN" }, courseId)).rejects.toThrow(
       CourseHasContentError
     );
   });

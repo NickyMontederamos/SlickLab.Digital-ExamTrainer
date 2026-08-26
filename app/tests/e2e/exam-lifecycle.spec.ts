@@ -37,13 +37,44 @@ test.describe.serial("full exam lifecycle", () => {
     await page.click('button:has-text("Add question")');
     await expect(page.getByText(questionPrompt)).toBeVisible();
 
+    // Exam creation moved into a "Create Assessment" modal during the
+    // faculty portal reskin (docs/PITCH_ROADMAP.md Milestone 9) — the
+    // title/time-limit fields exist inside it, not directly on the page.
     await page.click("text=Exams");
+    // A single click can land before this freshly-loaded page's client
+    // bundle has actually hydrated (Next.js dev mode JIT-compiles a route's
+    // client bundle on first visit — production builds have no such delay),
+    // in which case the click is simply lost, not delayed — waiting longer
+    // afterward doesn't help. Retrying the click itself until the dialog is
+    // actually open is the real fix, not a longer single wait. Checking
+    // whether it's already open first avoids re-clicking a trigger button
+    // that's now hidden behind an already-open dialog (which would just
+    // hang on its own actionability wait).
+    const dialog = page.locator("dialog[open]");
+    await expect(async () => {
+      if (!(await dialog.isVisible())) {
+        await page.click('button:has-text("Create Assessment")');
+      }
+      await expect(dialog).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
     await page.fill('input[name="title"]', examTitle);
     await page.fill('input[name="timeLimitMinutes"]', "60");
-    await page.click('button:has-text("Create exam")');
+    // Exact text match, not :has-text — the still-present "Create
+    // Assessment" trigger button behind the now-open modal also contains
+    // the substring "Create", and :has-text matched that one first (hidden
+    // behind the dialog, so the click silently never landed).
+    await page.click('button:text-is("Create")');
     await expect(page.getByText(examTitle)).toBeVisible();
 
     await page.click(`text=${examTitle}`);
+    // examMonitoringEnabled defaults to true (Milestone 9's real device
+    // check) — turned off for this E2E exam so the student flow below
+    // doesn't need real camera/mic plumbing in the test browser. This
+    // itself exercises the checkbox, not just a workaround.
+    await page.uncheck('input[name="examMonitoringEnabled"]');
+    await page.click('button:has-text("Save changes")');
+    await expect(page.locator('input[name="examMonitoringEnabled"]')).not.toBeChecked();
+
     await page.selectOption('select[name="questionId"]', { label: `[MULTIPLE_CHOICE] ${questionPrompt}` });
     await page.fill('input[name="points"]', "1");
     await page.click('button:has-text("Add to exam")');
@@ -64,20 +95,29 @@ test.describe.serial("full exam lifecycle", () => {
 
     await page.click("text=LAW101");
     await page.click(`text=${examTitle}`);
-    // Book -> receipt -> Exam Rules -> gate sequence -> exam. Booking and
-    // beginning are two separate steps now (docs/PITCH_ROADMAP.md's booking
-    // flow) — confirm the booking first and wait for the receipt to render
-    // before continuing, same "wait for the actual UI evidence" discipline
-    // as the add-question/publish race fixed above. This exam has no
-    // booking window, so no time picker appears — booking stays "anytime".
+    // Book -> download/password gate -> receipt -> Exam Rules -> gate
+    // sequence -> exam. Booking and beginning are two separate steps now
+    // (docs/PITCH_ROADMAP.md's booking flow) — confirm the booking first and
+    // wait for the receipt to render before continuing, same "wait for the
+    // actual UI evidence" discipline as the add-question/publish race fixed
+    // above. This exam has no booking window, so no time picker appears —
+    // booking stays "anytime".
     await page.click('button:has-text("Confirm Booking")');
+    // ExamDownloadGate (docs/PITCH_ROADMAP.md Milestone 9) now sits between
+    // booking and the entry gate — a decorative download/password ceremony.
+    // No assessmentPassword is set on this exam, so any non-empty value
+    // unlocks it (ExamDownloadGate's documented backward-compat fallback).
+    await page.click('button:has-text("Download Exam")');
+    await page.fill('input[type="password"]', "test-password");
+    await page.click('button:has-text("Enter")');
     await expect(page.getByText("Booking Confirmed")).toBeVisible();
     await page.click('button:has-text("Continue to Exam Rules")');
     await page.check('input[type="checkbox"]'); // agree to the exam rules
     await page.click('button:has-text("Start Exam")');
-    // The click kicks off ExamEntryGate's device/ID/room-scan sequence, then
-    // a REAL wait-for-proctor-approval gate (docs/PITCH_ROADMAP.md Milestone
-    // 5) — nothing auto-approves it. A second browser context logs in as
+    // examMonitoringEnabled is off for this exam (see above), so
+    // ExamEntryGate skips straight past the real device/ExamID check to the
+    // wait-for-proctor-approval gate (docs/PITCH_ROADMAP.md Milestone 5) —
+    // nothing auto-approves it. A second browser context logs in as
     // the seeded demo proctor (assigned to LAW101 in prisma/seed.ts) and
     // approves the request while the student's page is still polling. Kept
     // open for the whole test (not closed right after each click) —
@@ -109,7 +149,10 @@ test.describe.serial("full exam lifecycle", () => {
     // only proceeds once its poll notices the approval above.
     await page.waitForURL(/\/attempts\//, { timeout: 30_000 });
 
-    await page.locator('input[type="radio"]').first().check(); // the seeded correct choice is first
+    // Visually hidden (sr-only) — a lettered pill is what a real student
+    // clicks (PAGE TEMPLATE/Student Overview_Exam), the native input is
+    // still what's functionally checked underneath it.
+    await page.locator('input[type="radio"]').first().check({ force: true }); // the seeded correct choice is first
     await page.click('button:has-text("Submit Exam")');
 
     // Real "approve to finish" step (Milestone 5): the result stays behind

@@ -44,7 +44,7 @@ export default async function LoginPage({
           <Image src={branding.sealUrl} alt="College of Maasin seal" width={72} height={72} className="drop-shadow-sm" />
         )}
         {branding?.logoUrl && (
-          <Image src={branding.logoUrl} alt="College of Law crest" width={62} height={72} className="h-auto w-[62px] drop-shadow-sm" />
+          <Image src={branding.logoUrl} alt="College of Law crest" width={62} height={62} className="h-auto w-[62px] drop-shadow-sm" />
         )}
       </div>
       <div className="text-center">
