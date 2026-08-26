@@ -2,6 +2,7 @@ import type { Prisma, QuestionType } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { AutosaveStatus } from "@/components/AutosaveStatus";
 import { ExamCountdown } from "@/components/ExamCountdown";
 import { ExamControlsMenu } from "@/components/ExamControlsMenu";
 import { ExamToolbar } from "@/components/ExamToolbar";
@@ -25,6 +26,7 @@ type AnswerRow = AttemptView["answers"][number];
 type AnswerShape = { choiceIds?: string[]; text?: string };
 
 const SUBMIT_BUTTON_ID = "submit-exam-button";
+const ANSWERS_FORM_ID = "exam-answers-form";
 
 function parseAnswerFromForm(formData: FormData, examQuestionId: string, questionType: QuestionType): Prisma.InputJsonValue | null {
   const name = `answer_${examQuestionId}`;
@@ -185,11 +187,14 @@ export default async function TakeExamPage({ params }: { params: Promise<{ attem
           <h1 className="text-xl font-semibold text-slate-900">{attempt.examVersion.exam.title}</h1>
           <ExamControlsMenu submitButtonId={SUBMIT_BUTTON_ID} />
         </div>
-        <ExamCountdown deadlineEpochMs={deadlineEpochMs} submitButtonId={SUBMIT_BUTTON_ID} />
+        <div className="flex items-center gap-3">
+          <ExamCountdown deadlineEpochMs={deadlineEpochMs} submitButtonId={SUBMIT_BUTTON_ID} />
+          <AutosaveStatus formId={ANSWERS_FORM_ID} />
+        </div>
         <IntegrityMonitor attemptId={attemptId} initialWarningCount={warningCount} recordEventAction={recordIntegrityEventAction} />
       </div>
 
-      <form action={saveProgressAction} className="flex flex-col gap-6">
+      <form id={ANSWERS_FORM_ID} action={saveProgressAction} className="flex flex-col gap-6">
         <ExamQuestionPager questions={questionMeta} submitButtonId={SUBMIT_BUTTON_ID}>
           {attempt.examVersion.examQuestions.map((eq, index) => {
             const existingRow = answersByQuestion.get(eq.id);
