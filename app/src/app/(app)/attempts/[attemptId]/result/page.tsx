@@ -78,17 +78,69 @@ export default async function AttemptResultPage({
 
       <div className="flex flex-col gap-2">
         {result.breakdown.map((row, i) => (
-          <Card key={i} className="text-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-slate-900">Q{i + 1}</span>
-              <span className="text-slate-500">
-                {row.pending ? "Pending grading" : `${row.pointsAwarded} / ${row.maxPoints} pt(s)`}
-              </span>
+          <Card key={i} className="flex items-start gap-3 text-sm">
+            <ReviewMark row={row} />
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-slate-900">Q{i + 1}</span>
+                <span className="text-slate-500">
+                  {row.pending ? "Pending grading" : `${row.pointsAwarded} / ${row.maxPoints} pt(s)`}
+                </span>
+              </div>
+              <p className="mt-1 text-slate-700">{row.prompt}</p>
             </div>
-            <p className="mt-1 text-slate-700">{row.prompt}</p>
           </Card>
         ))}
       </div>
     </main>
+  );
+}
+
+/**
+ * Per-question correct/incorrect/pending mark — green check, red X, or an
+ * amber clock, matching the review-screen convention the app this trainer
+ * practices for uses (a check/X/blank indicator per question). "Correct"
+ * is defined as full credit; anything short of that, including partial
+ * credit on a manually-graded answer, reads as incorrect rather than a
+ * misleading in-between state — there is no partial-credit icon to give.
+ */
+function ReviewMark({ row }: { row: { pending: boolean; pointsAwarded: number | null; maxPoints: number } }) {
+  if (row.pending) {
+    return (
+      <span
+        className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-amber-100 text-amber-700"
+        aria-label="Pending grading"
+        title="Pending grading"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .2.08.39.22.53l3.5 3.5a.75.75 0 101.06-1.06L10.75 9.7V5z" clipRule="evenodd" />
+        </svg>
+      </span>
+    );
+  }
+  const isCorrect = row.pointsAwarded !== null && row.pointsAwarded >= row.maxPoints;
+  if (isCorrect) {
+    return (
+      <span
+        className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-100 text-emerald-700"
+        aria-label="Correct"
+        title="Correct"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+          <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.4 7.4a1 1 0 01-1.4 0L3.3 9.5a1 1 0 111.4-1.4l3.9 3.9 6.7-6.7a1 1 0 011.4 0z" clipRule="evenodd" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span
+      className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-red-100 text-red-700"
+      aria-label="Incorrect"
+      title="Incorrect"
+    >
+      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+        <path fillRule="evenodd" d="M5.3 5.3a1 1 0 011.4 0L10 8.6l3.3-3.3a1 1 0 111.4 1.4L11.4 10l3.3 3.3a1 1 0 01-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 01-1.4-1.4L8.6 10 5.3 6.7a1 1 0 010-1.4z" clipRule="evenodd" />
+      </svg>
+    </span>
   );
 }

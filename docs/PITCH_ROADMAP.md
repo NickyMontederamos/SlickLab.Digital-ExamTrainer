@@ -778,6 +778,71 @@ Milestones 1–4, or as a fast-follow after a successful pitch:
 
 ---
 
+## Milestone 8 — Reskin toward the real app this trainer practices for
+
+**Built 2026-08-26**, the first milestone under this project's new identity:
+"CM Law Exam Readiness Trainer" (forked from CM-Law SecureExam — see that
+project's own history for everything through its P0 security hardening pass,
+all of which is inherited here). The purpose changed from "general secure-exam
+SaaS pitch" to "practice environment so CM Law students build real muscle
+memory before sitting the official ExamSoft/Examplify exam" — so the priority
+shifted from novel product design to *faithfully matching* specific, sourced
+interaction patterns from the real app, not inventing new ones.
+
+Researched against ExamSoft's own support documentation (not third-party
+"bypass" sites, several of which turned up in search results and were
+deliberately not used as sources) before touching any code. Confirmed
+patterns: a left-side numbered question panel; a **Filter** control over that
+panel (All / Unanswered / Flagged); an **Exam Controls** menu for submitting
+before the final question; the final question's Next button becoming Submit;
+and a post-submission review screen marking each question with a plain
+correct/incorrect indicator.
+
+- [x] **Filter control** (`ExamQuestionPager.tsx`) — All / Unanswered /
+      Flagged, filtering which question numbers appear in the palette without
+      touching which fieldset is currently open. Flag/answered state reflects
+      the last *saved* state, matching the pager's existing documented
+      behavior, not live keystrokes.
+- [x] **Last-question Submit swap** — the pager's Next button becomes Submit
+      exactly once the student reaches the final question, rather than being
+      a separate always-visible control.
+- [x] **`ExamControlsMenu.tsx`** (new) — the early-submission path, placed in
+      the page header next to the exam title, matching where the real app
+      puts its own equivalent. Closes on outside-click. Triggers the same
+      hidden submit button `ExamCountdown`'s auto-submit-on-expiry already
+      uses — one real submit path regardless of which UI element fired it.
+- [x] **Result-screen review marks** — green check / red X / amber pending
+      indicator per question on `/attempts/[attemptId]/result`, replacing the
+      plain point-count text. "Correct" is defined as full credit; a
+      manually-graded partial score reads as incorrect rather than inventing
+      a misleading in-between icon.
+- [x] **Explicitly not attempted**: the native app's install/launch/sync
+      ceremony from the reference screenshots. That's specific to a
+      downloaded desktop application: faking a "downloading your exam
+      package" step in a web app would be dishonest theater with no real
+      function, not a UI pattern worth replicating. Noted here as a
+      deliberate exclusion, not an oversight.
+
+**A real bug found during verification — in the test, not the app.** Manually
+driving two browser tabs against the same origin (student in one, proctor in
+the other) silently clobbered the shared session cookie, producing a
+misleading `ForbiddenError` that looked like an app defect until the dev
+server log was read directly. The existing E2E suite's `browser.newContext()`
+pattern exists specifically to avoid this — the new spec follows it.
+
+**Verified:** every new interaction was first driven live against the running
+dev server via a real proctor-gated booking → entry-gate → approval →
+in-exam → submit → result flow (not just component-level reasoning) before
+being written up as a permanent test. `tests/e2e/examplify-reskin.spec.ts`
+(3 tests) encodes that verified flow: the Filter control's All/Unanswered/
+Flagged behavior, the Next→Submit swap on the last question, the Exam
+Controls menu completing a real early submission, and the result screen's
+red-X mark rendering for a deliberately-wrong answer. Full gate: 168/168 unit,
+14/14 e2e (10 inherited + 4 new-and-reskin-adjacent), clean
+`tsc`/`eslint`/`build`.
+
+---
+
 ## Working agreement for this plan
 
 - Each milestone should be verified live in the browser and covered by tests

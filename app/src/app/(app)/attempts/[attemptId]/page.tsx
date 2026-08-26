@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { ExamCountdown } from "@/components/ExamCountdown";
+import { ExamControlsMenu } from "@/components/ExamControlsMenu";
 import { ExamToolbar } from "@/components/ExamToolbar";
 import { ExamQuestionPager, type QuestionPagerMeta } from "@/components/ExamQuestionPager";
 import { IntegrityMonitor } from "@/components/IntegrityMonitor";
@@ -180,13 +181,16 @@ export default async function TakeExamPage({ params }: { params: Promise<{ attem
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
       <div className="flex flex-col gap-2 border-b border-slate-200 pb-4">
-        <h1 className="text-xl font-semibold text-slate-900">{attempt.examVersion.exam.title}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-xl font-semibold text-slate-900">{attempt.examVersion.exam.title}</h1>
+          <ExamControlsMenu submitButtonId={SUBMIT_BUTTON_ID} />
+        </div>
         <ExamCountdown deadlineEpochMs={deadlineEpochMs} submitButtonId={SUBMIT_BUTTON_ID} />
         <IntegrityMonitor attemptId={attemptId} initialWarningCount={warningCount} recordEventAction={recordIntegrityEventAction} />
       </div>
 
       <form action={saveProgressAction} className="flex flex-col gap-6">
-        <ExamQuestionPager questions={questionMeta}>
+        <ExamQuestionPager questions={questionMeta} submitButtonId={SUBMIT_BUTTON_ID}>
           {attempt.examVersion.examQuestions.map((eq, index) => {
             const existingRow = answersByQuestion.get(eq.id);
             return (
