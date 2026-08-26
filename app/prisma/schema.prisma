@@ -1,0 +1,438 @@
+// CM-Law SecureExam — Phase 1 data model
+// See docs/ARCHITECTURE_DECISIONS.md ADR-003 for why Prisma, and
+// src/lib/tenant-db.ts for how tenant isolation is enforced at the query layer.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  INSTITUTION_ADMIN
+  FACULTY
+  PROCTOR
+  STUDENT
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  MULTIPLE_RESPONSE
+  TRUE_FALSE
+  ESSAY
+  SHORT_ANSWER
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AttemptStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  /// Auto-paused by the 3-strike integrity monitor, pending faculty review
+  /// (see AttemptEvent) — not a final state. Faculty either reinstates (back
+  /// to IN_PROGRESS) or confirms as TERMINATED.
+  INTERRUPTED
+  /// Confirmed integrity violation — terminal, like SUBMITTED/GRADED, but
+  /// distinct so the result view can show why instead of a plain score.
+  TERMINATED
+  SUBMITTED
+  GRADED
+}
+
+enum AttemptEventType {
+  WINDOW_BLUR
+  VISIBILITY_HIDDEN
+  FULLSCREEN_EXIT
+  /// Logged for faculty context only — never counted toward the 3-strike
+  /// threshold (see integrity.ts's STRIKE_EVENT_TYPES). A dropped connection
+  /// isn't the student's fault and must never be treated as misconduct.
+  NETWORK_OFFLINE
+  NETWORK_ONLINE
+}
+
+enum AuditResult {
+  SUCCESS
+  DENIED
+  ERROR
+}
+
+/// A subscribing school/organization. Every tenant-scoped table carries
+/// institutionId; SUPER_ADMIN/PLATFORM_ADMIN users are the only ones allowed
+/// a null institutionId (they operate across tenants by design).
+model Institution {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  /// Institution branding (master prompt §10). Logo paths are relative to
+  /// /public — fine for a single-deployment Phase 1 pitch demo; will need
+  /// to move to real object storage once institutions self-serve upload.
+  logoUrl         String?
+  sealUrl         String?
+  primaryColor    String?
+  secondaryColor  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users               User[]
+  courses             Course[]
+  questions           Question[]
+  exams               Exam[]
+  examAttempts        ExamAttempt[]
+  auditLogs           AuditLog[]
+  deviceRegistrations DeviceRegistration[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  institutionId  String?
+  institution    Institution? @relation(fields: [institutionId], references: [id])
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           Role
+  isActive       Boolean      @default(true)
+  /// Hard cutoff for existing sessions: any session established before this
+  /// instant is rejected on its next request, even if the JWT is otherwise
+  /// valid and unexpired. Set whenever access must be cut immediately
+  /// rather than at the next periodic revalidation — deactivation and
+  /// admin password reset (see users.ts). Null means "no forced cutoff",
+  /// which is the normal state for an untouched account.
+  ///
+  /// This exists because the session strategy is stateless JWT: without a
+  /// server-side session table there is nothing to delete, so revocation
+  /// has to be expressed as a timestamp the token is checked against.
+  sessionsValidAfter DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  coursesTaught       CourseFaculty[]
+  coursesProctoring   CourseProctor[]
+  enrollments         Enrollment[]
+  questionsCreated    Question[]        @relation("QuestionCreatedBy")
+  examsCreated        Exam[]            @relation("ExamCreatedBy")
+  examAttempts        ExamAttempt[]
+  answersGraded       ExamAnswer[]      @relation("AnswerGradedBy")
+  submissionsVerified Submission[]      @relation("SubmissionVerifiedBy")
+  auditLogs           AuditLog[]
+  deviceRegistrations DeviceRegistration[]
+
+  @@index([institutionId])
+}
+
+model Course {
+  id            String      @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  code          String
+  name          String
+  academicYear  String
+  createdAt     DateTime    @default(now())
+
+  faculty     CourseFaculty[]
+  proctors    CourseProctor[]
+  enrollments Enrollment[]
+  questions   Question[]
+  exams       Exam[]
+
+  @@unique([institutionId, code, academicYear])
+  @@index([institutionId])
+}
+
+model CourseFaculty {
+  id            String      @id @default(cuid())
+  institutionId String
+  courseId      String
+  course        Course      @relation(fields: [courseId], references: [id])
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  @@unique([courseId, userId])
+  @@index([institutionId])
+}
+
+/// Which PROCTOR users may act on a course's exam attempts — same
+/// roster-assignment shape as CourseFaculty, kept as its own table rather
+/// than reusing CourseFaculty so a user's faculty and proctor assignments
+/// stay independent (a PROCTOR is never implicitly a course's faculty).
+model CourseProctor {
+  id            String      @id @default(cuid())
+  institutionId String
+  courseId      String
+  course        Course      @relation(fields: [courseId], references: [id])
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+
+  @@unique([courseId, userId])
+  @@index([institutionId])
+}
+
+model Enrollment {
+  id            String   @id @default(cuid())
+  institutionId String
+  courseId      String
+  course        Course   @relation(fields: [courseId], references: [id])
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  enrolledAt    DateTime @default(now())
+
+  @@unique([courseId, userId])
+  @@index([institutionId])
+}
+
+/// A question is a stable identity; its gradeable content lives in
+/// versions so a past exam attempt can permanently reference the exact
+/// wording/answer key it was graded against.
+model Question {
+  id                 String       @id @default(cuid())
+  institutionId      String
+  institution        Institution  @relation(fields: [institutionId], references: [id])
+  courseId           String?
+  course             Course?      @relation(fields: [courseId], references: [id])
+  type               QuestionType
+  difficulty         String?
+  tags               String[]
+  learningObjectives String[]
+  createdById        String
+  createdBy          User         @relation("QuestionCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime     @default(now())
+
+  versions      QuestionVersion[]
+  examQuestions ExamQuestion[]
+
+  @@index([institutionId])
+  @@index([courseId])
+}
+
+model QuestionVersion {
+  id            String   @id @default(cuid())
+  questionId    String
+  question      Question @relation(fields: [questionId], references: [id])
+  versionNumber Int
+  prompt        String
+  /// Choices for MC/MR/TF; null for essay/short-answer.
+  choices       Json?
+  /// Correct answer key; withheld from student-facing API responses.
+  correctAnswer Json?
+  points        Float
+  createdAt     DateTime @default(now())
+
+  examQuestions ExamQuestion[]
+
+  @@unique([questionId, versionNumber])
+}
+
+model Exam {
+  id            String      @id @default(cuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  courseId      String
+  course        Course      @relation(fields: [courseId], references: [id])
+  title         String
+  status        ExamStatus  @default(DRAFT)
+  createdById   String
+  createdBy     User        @relation("ExamCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime    @default(now())
+
+  versions ExamVersion[]
+
+  @@index([institutionId])
+  @@index([courseId])
+}
+
+/// Immutable once published (master prompt §11: "Do not silently mutate the
+/// active exam version"). Edits after publish create a new version instead.
+model ExamVersion {
+  id                  String   @id @default(cuid())
+  examId              String
+  exam                Exam     @relation(fields: [examId], references: [id])
+  versionNumber       Int
+  isActive            Boolean  @default(true)
+  instructions        String?
+  timeLimitMinutes    Int
+  availableFrom       DateTime?
+  availableUntil      DateTime?
+  allowBacktracking   Boolean  @default(true)
+  randomizeQuestions  Boolean  @default(false)
+  randomizeAnswers    Boolean  @default(false)
+  reviewModeEnabled   Boolean  @default(true)
+  calculatorAllowed   Boolean  @default(false)
+  attachmentsAllowed  Boolean  @default(false)
+  securityPolicy      Json?
+  createdAt           DateTime @default(now())
+
+  examQuestions ExamQuestion[]
+  examAttempts  ExamAttempt[]
+
+  @@unique([examId, versionNumber])
+}
+
+model ExamQuestion {
+  id                String          @id @default(cuid())
+  examVersionId     String
+  examVersion       ExamVersion     @relation(fields: [examVersionId], references: [id])
+  questionId        String
+  question          Question        @relation(fields: [questionId], references: [id])
+  questionVersionId String
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  order             Int
+  points            Float
+
+  examAnswers ExamAnswer[]
+
+  @@unique([examVersionId, questionId])
+}
+
+model ExamAttempt {
+  id                  String        @id @default(cuid())
+  institutionId       String
+  institution         Institution   @relation(fields: [institutionId], references: [id])
+  examVersionId       String
+  examVersion         ExamVersion   @relation(fields: [examVersionId], references: [id])
+  studentId           String
+  student             User          @relation(fields: [studentId], references: [id])
+  status              AttemptStatus @default(NOT_STARTED)
+  /// Student-picked instant within the exam's availableFrom/availableUntil
+  /// window (see bookAttempt in attempts.ts). Null when the exam has no
+  /// window at all — booking is then "anytime", same as before this field
+  /// existed. Informational only in Phase 1: does not yet gate when Start
+  /// Exam can be clicked (tracked in docs/PITCH_ROADMAP.md as deferred
+  /// hardening).
+  scheduledFor        DateTime?
+  /// Set when the student finishes the entry gate's device/identity/room
+  /// checks and signals "ready to start, waiting for a proctor" — the real
+  /// replacement for the old scripted "Waiting for proctor…" delay. Null
+  /// means no request has been made yet.
+  proctorRequestedAt  DateTime?
+  /// Set when a proctor assigned to this exam's course approves the
+  /// request above. beginBookedAttempt() refuses to start the timer until
+  /// this is set (see ProctorApprovalRequiredError in attempts.ts) — this
+  /// is the real gate that replaces the mocked delay.
+  proctorApprovedAt   DateTime?
+  startedAt           DateTime?
+  /// The authoritative deadline for this attempt — the single source of
+  /// truth the server enforces on every write (see attemptDeadline() in
+  /// attempts.ts). Set when the timer actually begins, NOT when the
+  /// attempt row is created, so the booking/entry-gate sequence never
+  /// burns exam time. Stored explicitly rather than derived from
+  /// startedAt + timeLimitMinutes so that pause time (INTERRUPTED, see
+  /// pausedAt) and any future proctor time-extension can move it without
+  /// rewriting startedAt, which must keep meaning "when the exam began".
+  /// Null on legacy rows created before this column existed — callers fall
+  /// back to startedAt + timeLimitMinutes for those.
+  expiresAt           DateTime?
+  /// When the current INTERRUPTED pause began. On reinstatement the paused
+  /// duration is added back to expiresAt, so a student is never charged
+  /// exam time for a faculty review — least of all one that clears them.
+  /// Null whenever the attempt is not currently paused.
+  pausedAt            DateTime?
+  submittedAt         DateTime?
+  gradedAt            DateTime?
+  deviceId            String?
+  timeRemainingSeconds Int?
+  createdAt           DateTime      @default(now())
+
+  answers    ExamAnswer[]
+  submission Submission?
+  events     AttemptEvent[]
+
+  @@unique([examVersionId, studentId])
+  @@index([institutionId])
+}
+
+/// Append-only integrity signal log (master prompt anti-cheat scope). Every
+/// blur/visibility/fullscreen-exit signal is recorded here regardless of
+/// whether it crosses the warning threshold — the visible "Warning X of 3"
+/// counter is a derived read of this table, never the source of truth. No
+/// institutionId of its own, same reasoning as ExamAnswer — ownership is
+/// verified via the parent attempt's institutionId (see integrity.ts).
+model AttemptEvent {
+  id         String           @id @default(cuid())
+  attemptId  String
+  attempt    ExamAttempt      @relation(fields: [attemptId], references: [id])
+  type       AttemptEventType
+  occurredAt DateTime         @default(now())
+
+  @@index([attemptId])
+}
+
+model ExamAnswer {
+  id             String       @id @default(cuid())
+  attemptId      String
+  attempt        ExamAttempt  @relation(fields: [attemptId], references: [id])
+  examQuestionId String
+  examQuestion   ExamQuestion @relation(fields: [examQuestionId], references: [id])
+  responseJson   Json?
+  isFlagged      Boolean      @default(false)
+  savedAt        DateTime     @updatedAt
+
+  /// Auto-graded on submission for objective types (MC/MR/TF); left null
+  /// for essay/short-answer until a faculty member grades it manually
+  /// (master prompt §21). autoGraded distinguishes the two for the UI/audit
+  /// trail even after a manual override.
+  pointsAwarded Float?
+  autoGraded    Boolean   @default(false)
+  gradedAt      DateTime?
+  gradedById    String?
+  gradedBy      User?     @relation("AnswerGradedBy", fields: [gradedById], references: [id])
+
+  @@unique([attemptId, examQuestionId])
+}
+
+model Submission {
+  id                  String      @id @default(cuid())
+  attemptId           String      @unique
+  attempt             ExamAttempt @relation(fields: [attemptId], references: [id])
+  encryptedPayloadRef  String?
+  signature            String?
+  receiptId            String      @unique @default(cuid())
+  uploadedAt            DateTime    @default(now())
+  /// The real "approve to finish" step (docs/PITCH_ROADMAP.md Milestone 5):
+  /// a student sees their result only once a proctor sets this — see
+  /// verifySubmission in proctoring.ts. Never set by submitAttempt itself.
+  verifiedAt            DateTime?
+  verifiedById          String?
+  verifiedBy            User?       @relation("SubmissionVerifiedBy", fields: [verifiedById], references: [id])
+}
+
+/// WHO / WHAT / WHEN / WHERE / RESULT (master prompt §20). Append-only in
+/// practice — application code must never expose an update/delete path.
+model AuditLog {
+  id            String       @id @default(cuid())
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  actorUserId   String?
+  actor         User?        @relation(fields: [actorUserId], references: [id])
+  action        String
+  resourceType  String
+  resourceId    String?
+  result        AuditResult
+  metadata      Json?
+  ipAddress     String?
+  createdAt     DateTime     @default(now())
+
+  @@index([institutionId])
+  @@index([actorUserId])
+  @@index([createdAt])
+}
+
+model DeviceRegistration {
+  id                String      @id @default(cuid())
+  institutionId     String
+  institution       Institution @relation(fields: [institutionId], references: [id])
+  userId            String
+  user              User        @relation(fields: [userId], references: [id])
+  deviceFingerprint String
+  registeredAt      DateTime    @default(now())
+  lastSeenAt        DateTime    @updatedAt
+
+  @@unique([userId, deviceFingerprint])
+  @@index([institutionId])
+}

@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: examtrainer
+      POSTGRES_PASSWORD: examtrainer_dev_only
+      POSTGRES_DB: examtrainer
+    ports:
+      # Host port 5433, not 5432 — the original CM-Law SecureExam project's
+      # Postgres container already binds 5432 on this machine, and both
+      # projects need to run side by side without one refusing to start.
+      - "5433:5432"
+    volumes:
+      - examtrainer_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U examtrainer -d examtrainer"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  examtrainer_pgdata:

@@ -1,0 +1,224 @@
+import type { Prisma, QuestionType } from "@prisma/client";
+import { notFound, redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
+import { ExamCountdown } from "@/components/ExamCountdown";
+import { ExamToolbar } from "@/components/ExamToolbar";
+import { ExamQuestionPager, type QuestionPagerMeta } from "@/components/ExamQuestionPager";
+import { IntegrityMonitor } from "@/components/IntegrityMonitor";
+import {
+  AttemptNotFoundError,
+  AttemptOwnershipError,
+  attemptDeadline,
+  getAttemptForTaking,
+  saveAnswers,
+  submitAttempt,
+} from "@/lib/attempts";
+import { getWarningCount } from "@/lib/integrity";
+import { recordIntegrityEventAction } from "./actions";
+import { Alert, Badge, Button, Card, inputClassName } from "@/components/ui";
+
+type AttemptView = Awaited<ReturnType<typeof getAttemptForTaking>>;
+type ExamQuestionView = AttemptView["examVersion"]["examQuestions"][number];
+type AnswerRow = AttemptView["answers"][number];
+type AnswerShape = { choiceIds?: string[]; text?: string };
+
+const SUBMIT_BUTTON_ID = "submit-exam-button";
+
+function parseAnswerFromForm(formData: FormData, examQuestionId: string, questionType: QuestionType): Prisma.InputJsonValue | null {
+  const name = `answer_${examQuestionId}`;
+  if (questionType === "MULTIPLE_CHOICE" || questionType === "TRUE_FALSE") {
+    const value = formData.get(name);
+    return value ? { choiceIds: [String(value)] } : null;
+  }
+  if (questionType === "MULTIPLE_RESPONSE") {
+    const values = formData.getAll(name).map(String);
+    return values.length > 0 ? { choiceIds: values } : null;
+  }
+  const text = formData.get(name);
+  return text ? { text: String(text) } : null;
+}
+
+function readAnswersFromForm(examQuestions: ExamQuestionView[], formData: FormData) {
+  return examQuestions
+    .map((eq) => ({
+      examQuestionId: eq.id,
+      responseJson: parseAnswerFromForm(formData, eq.id, eq.question.type),
+      isFlagged: formData.get(`flag_${eq.id}`) === "on",
+    }))
+    // A question with neither a response nor a flag has nothing worth
+    // writing — this is what lets "flag it, come back later" work for a
+    // question the student hasn't answered yet.
+    .filter((a) => a.responseJson !== null || a.isFlagged);
+}
+
+function renderInput(eq: ExamQuestionView, existingRow: AnswerRow | undefined) {
+  const existing = existingRow?.responseJson as AnswerShape | undefined;
+  const choices = (eq.questionVersion.choices as { id: string; text: string }[] | null) ?? [];
+  const name = `answer_${eq.id}`;
+
+  if (eq.question.type === "MULTIPLE_CHOICE" || eq.question.type === "TRUE_FALSE") {
+    const selected = existing?.choiceIds?.[0];
+    return (
+      <div className="flex flex-col gap-1">
+        {choices.map((c) => (
+          <label key={c.id} className="flex items-center gap-2 text-sm">
+            <input type="radio" name={name} value={c.id} defaultChecked={selected === c.id} />
+            {c.text}
+          </label>
+        ))}
+      </div>
+    );
+  }
+  if (eq.question.type === "MULTIPLE_RESPONSE") {
+    const selectedIds = existing?.choiceIds ?? [];
+    return (
+      <div className="flex flex-col gap-1">
+        {choices.map((c) => (
+          <label key={c.id} className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name={name} value={c.id} defaultChecked={selectedIds.includes(c.id)} />
+            {c.text}
+          </label>
+        ))}
+      </div>
+    );
+  }
+  if (eq.question.type === "SHORT_ANSWER") {
+    return <input name={name} defaultValue={existing?.text ?? ""} className={`w-full ${inputClassName}`} />;
+  }
+  return <textarea name={name} defaultValue={existing?.text ?? ""} rows={4} className={`w-full ${inputClassName}`} />;
+}
+
+export default async function TakeExamPage({ params }: { params: Promise<{ attemptId: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id || !session.user.institutionId) {
+    redirect("/login");
+  }
+
+  const { attemptId } = await params;
+  const institutionId = session.user.institutionId;
+
+  let attempt: AttemptView;
+  try {
+    attempt = await getAttemptForTaking(institutionId, session.user, attemptId);
+  } catch (error) {
+    if (error instanceof AttemptNotFoundError) {
+      notFound();
+    }
+    if (error instanceof AttemptOwnershipError) {
+      redirect("/dashboard");
+    }
+    throw error;
+  }
+
+  if (attempt.status === "INTERRUPTED") {
+    return (
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
+        <h1 className="text-xl font-semibold text-slate-900">{attempt.examVersion.exam.title}</h1>
+        <Alert tone="warning">
+          Your exam was paused after repeated warnings (leaving the window or exiting fullscreen). A faculty member
+          will review your session — you&apos;ll be notified once it&apos;s resolved. Your answers so far are saved.
+        </Alert>
+      </main>
+    );
+  }
+
+  if (attempt.status !== "IN_PROGRESS") {
+    redirect(`/attempts/${attemptId}/result`);
+  }
+
+  // Server-authoritative timer: read from the attempt's stored deadline
+  // (attemptDeadline, which also accounts for time spent paused under
+  // integrity review), never trusted from the client. This render-time
+  // check is a convenience that redirects an expired attempt promptly —
+  // it is NOT the enforcement boundary. saveAnswers() enforces the same
+  // deadline server-side, so skipping this page entirely (direct server
+  // action call, stale tab, disabled JS) cannot buy extra time.
+  // This is a Server Component computing a server-authoritative timestamp once per
+  // request (not a client render the purity rule is meant to protect) — Date.now() here IS the point.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const deadline = attemptDeadline(attempt, attempt.examVersion.timeLimitMinutes);
+  const deadlineEpochMs = deadline ? deadline.getTime() : now;
+
+  if (deadline && now > deadline.getTime()) {
+    await submitAttempt(institutionId, session.user, attemptId);
+    redirect(`/attempts/${attemptId}/result?expired=1`);
+  }
+
+  const answersByQuestion = new Map(attempt.answers.map((a) => [a.examQuestionId, a]));
+  const examQuestions = attempt.examVersion.examQuestions;
+  const warningCount = await getWarningCount(institutionId, attemptId);
+  const questionMeta: QuestionPagerMeta[] = examQuestions.map((eq) => {
+    const row = answersByQuestion.get(eq.id);
+    return { id: eq.id, flagged: row?.isFlagged ?? false, answered: row?.responseJson != null };
+  });
+
+  async function saveProgressAction(formData: FormData) {
+    "use server";
+    const authSession = await auth();
+    if (!authSession?.user?.id || !authSession.user.institutionId) {
+      redirect("/login");
+    }
+
+    await saveAnswers(authSession.user.institutionId, authSession.user, attemptId, readAnswersFromForm(examQuestions, formData));
+    revalidatePath(`/attempts/${attemptId}`);
+  }
+
+  async function submitExamAction(formData: FormData) {
+    "use server";
+    const authSession = await auth();
+    if (!authSession?.user?.id || !authSession.user.institutionId) {
+      redirect("/login");
+    }
+
+    await saveAnswers(authSession.user.institutionId, authSession.user, attemptId, readAnswersFromForm(examQuestions, formData));
+    await submitAttempt(authSession.user.institutionId, authSession.user, attemptId);
+    redirect(`/attempts/${attemptId}/result`);
+  }
+
+  return (
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-6">
+      <div className="flex flex-col gap-2 border-b border-slate-200 pb-4">
+        <h1 className="text-xl font-semibold text-slate-900">{attempt.examVersion.exam.title}</h1>
+        <ExamCountdown deadlineEpochMs={deadlineEpochMs} submitButtonId={SUBMIT_BUTTON_ID} />
+        <IntegrityMonitor attemptId={attemptId} initialWarningCount={warningCount} recordEventAction={recordIntegrityEventAction} />
+      </div>
+
+      <form action={saveProgressAction} className="flex flex-col gap-6">
+        <ExamQuestionPager questions={questionMeta}>
+          {attempt.examVersion.examQuestions.map((eq, index) => {
+            const existingRow = answersByQuestion.get(eq.id);
+            return (
+              <Card key={eq.id} as="fieldset">
+                <legend className="mb-2 flex items-center gap-2 px-1 text-sm font-medium text-slate-900">
+                  <span>
+                    Q{index + 1} · {eq.points} pt(s)
+                  </span>
+                  {existingRow?.isFlagged && <Badge tone="amber">Flagged</Badge>}
+                </legend>
+                <p className="mb-2 text-sm text-slate-700">{eq.questionVersion.prompt}</p>
+                {renderInput(eq, existingRow)}
+                <label className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                  <input type="checkbox" name={`flag_${eq.id}`} defaultChecked={existingRow?.isFlagged ?? false} />
+                  Flag this question to review before submitting
+                </label>
+              </Card>
+            );
+          })}
+        </ExamQuestionPager>
+
+        <div className="flex gap-3">
+          <Button type="submit" variant="secondary">
+            Save Progress
+          </Button>
+          <Button id={SUBMIT_BUTTON_ID} formAction={submitExamAction}>
+            Submit Exam
+          </Button>
+        </div>
+      </form>
+
+      <ExamToolbar />
+    </main>
+  );
+}
