@@ -3,19 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, Button, Card } from "@/components/ui";
+import { DeviceAndIdentityCheck } from "@/components/DeviceAndIdentityCheck";
 
-type GateStep = "receipt" | "rules" | "device" | "identity" | "room" | "proctor" | "starting";
+type GateStep = "receipt" | "rules" | "device" | "proctor" | "starting";
 
-const STEP_LABELS: Record<Extract<GateStep, "device" | "identity" | "room" | "proctor" | "starting">, string> = {
-  device: "Checking your device…",
-  identity: "Capturing ID…",
-  room: "Scanning your surroundings…",
+const STEP_LABELS: Record<Extract<GateStep, "proctor" | "starting">, string> = {
   proctor: "Waiting for proctor approval…",
   starting: "Starting your exam…",
 };
-
-/** How long each mocked gate step is shown before advancing — pacing for a demo, not a real check duration. */
-const STEP_DELAY_MS = 1400;
 
 /**
  * How often the "proctor" step re-checks whether it's been approved (see
@@ -42,14 +37,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined>
 }
 
 /**
- * Everything after "Confirm Booking" and before the exam actually starts:
- * a receipt, the Exam Rules agreement, then the device/ID/room-scan/proctor
- * sequence (docs/PITCH_ROADMAP.md). Device/ID/room-scan are deliberately
- * mocked — no real camera access — so a missing/blocked camera on a demo
- * device can never derail a live pitch. Fullscreen is the one real check
- * here, and it's soft: exiting/denying it never blocks the exam, it just
- * becomes the first thing the in-exam integrity monitor can flag once
- * questions start.
+ * Everything after "Confirm Booking" and before the exam actually starts: a
+ * receipt, the Exam Rules agreement, then the device-check/proctor sequence
+ * (docs/PITCH_ROADMAP.md). Fullscreen is a real soft check here — exiting/
+ * denying it never blocks the exam, it just becomes the first thing the
+ * in-exam integrity monitor can flag once questions start.
  *
  * The proctor step is real as of Milestone 5: it signals the student's
  * attempt is ready (requestProctorApprovalAction) and polls
@@ -59,10 +51,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined>
  *
  * `examMonitoringEnabled` (ExamVersion field, faculty-set) is Examplify's
  * real ExamID + ExamMonitor distinction — some exams require them, some
- * don't. When false, the device/identity/room-scan steps below are skipped
- * entirely and the sequence goes straight from Exam Rules to the proctor
- * wait; the human-proctor gate itself is a separate, always-on feature in
- * this app and isn't tied to ExamMonitor.
+ * don't. When true, the "device" step renders DeviceAndIdentityCheck, which
+ * is genuinely real (real getUserMedia permission, real live preview, real
+ * mic level, real photo capture — see that component's docstring for what's
+ * deliberately not persisted). When false, that step is skipped entirely
+ * and the sequence goes straight from Exam Rules to the proctor wait; the
+ * human-proctor gate itself is a separate, always-on feature in this app
+ * and isn't tied to ExamMonitor.
  *
  * NOTE for later hardening: the booked window doesn't currently gate when
  * "Start Exam" can be clicked — it's available immediately after booking,
@@ -97,25 +92,24 @@ export function ExamEntryGate({
   const [error, setError] = useState<string | null>(null);
 
   async function runGateSequence() {
-    if (examMonitoringEnabled) {
-      setStep("device");
-      try {
-        const request = document.documentElement.requestFullscreen?.();
-        if (request) {
-          await withTimeout(request, 1500);
-        }
-      } catch {
-        // Soft check — proceed regardless. See this file's top comment.
+    try {
+      const request = document.documentElement.requestFullscreen?.();
+      if (request) {
+        await withTimeout(request, 1500);
       }
-      await wait(STEP_DELAY_MS);
-
-      setStep("identity");
-      await wait(STEP_DELAY_MS);
-
-      setStep("room");
-      await wait(STEP_DELAY_MS);
+    } catch {
+      // Soft check — proceed regardless. See this file's top comment.
     }
 
+    if (examMonitoringEnabled) {
+      setStep("device");
+      return;
+    }
+
+    await proceedToProctorAndStart();
+  }
+
+  async function proceedToProctorAndStart() {
     setStep("proctor");
     try {
       await requestProctorApprovalAction(attemptId);
@@ -191,6 +185,10 @@ export function ExamEntryGate({
         </Button>
       </Card>
     );
+  }
+
+  if (step === "device") {
+    return <DeviceAndIdentityCheck onComplete={proceedToProctorAndStart} />;
   }
 
   return (
