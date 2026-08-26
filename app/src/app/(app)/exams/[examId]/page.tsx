@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
 import { ExamEntryGate } from "@/components/ExamEntryGate";
+import { ExamDownloadGate } from "@/components/ExamDownloadGate";
 import {
   addExamQuestion,
   addExamQuestions,
@@ -105,8 +106,8 @@ export default async function ExamBuilderPage({
         {!myAttempt && (
           <Card className="flex flex-col gap-4">
             <div>
-              <h2 className="mb-1 text-base font-semibold text-slate-900">Book This Exam</h2>
-              <p className="text-sm text-slate-500">Available: {windowLabel ?? "No fixed window — book anytime"}</p>
+              <h2 className="mb-1 text-base font-semibold text-slate-900 dark:text-slate-100">Book This Exam</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Available: {windowLabel ?? "No fixed window — book anytime"}</p>
             </div>
             <form action={confirmBookingAction} className="flex flex-col gap-3">
               {hasWindow && (
@@ -129,16 +130,24 @@ export default async function ExamBuilderPage({
           </Card>
         )}
         {myAttempt?.status === "NOT_STARTED" && (
-          <ExamEntryGate
+          <ExamDownloadGate
             attemptId={myAttempt.id}
             examTitle={exam.title}
-            windowLabel={windowLabel}
-            scheduledForLabel={scheduledForLabel}
-            confirmationCode={myAttempt.id}
-            beginAttemptAction={beginAttemptAction}
-            requestProctorApprovalAction={requestProctorApprovalAction}
-            checkProctorApprovalAction={checkProctorApprovalAction}
-          />
+            timeLimitMinutes={version?.timeLimitMinutes ?? 60}
+            questionCount={version?.examQuestions.length ?? 0}
+            totalPoints={version?.examQuestions.reduce((sum, eq) => sum + eq.points, 0) ?? 0}
+          >
+            <ExamEntryGate
+              attemptId={myAttempt.id}
+              examTitle={exam.title}
+              windowLabel={windowLabel}
+              scheduledForLabel={scheduledForLabel}
+              confirmationCode={myAttempt.id}
+              beginAttemptAction={beginAttemptAction}
+              requestProctorApprovalAction={requestProctorApprovalAction}
+              checkProctorApprovalAction={checkProctorApprovalAction}
+            />
+          </ExamDownloadGate>
         )}
         {myAttempt?.status === "IN_PROGRESS" && (
           <LinkButton href={`/attempts/${myAttempt.id}`} className="justify-center">
@@ -371,7 +380,7 @@ export default async function ExamBuilderPage({
           <>
             Questions ({version?.examQuestions.length ?? 0})
             {version && version.examQuestions.length > 0 && (
-              <span className="ml-2 font-normal text-slate-500">
+              <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
                 · {version.examQuestions.reduce((sum, eq) => sum + eq.points, 0)} pt(s) total
               </span>
             )}
@@ -383,9 +392,9 @@ export default async function ExamBuilderPage({
           {version?.examQuestions.map((eq) => (
             <Card key={eq.id} className="text-sm">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">Q{eq.order + 1}</span>
+                <span className="font-medium text-slate-900 dark:text-slate-100">Q{eq.order + 1}</span>
                 <span className="flex items-center gap-3">
-                  <span className="text-slate-500">{eq.points} pt(s)</span>
+                  <span className="text-slate-500 dark:text-slate-400">{eq.points} pt(s)</span>
                   {canEdit && (
                     <form action={removeQuestionAction}>
                       <input type="hidden" name="examQuestionId" value={eq.id} />
@@ -396,7 +405,7 @@ export default async function ExamBuilderPage({
                   )}
                 </span>
               </div>
-              <p className="mt-1 text-slate-700">{eq.questionVersion.prompt}</p>
+              <p className="mt-1 text-slate-700 dark:text-slate-300">{eq.questionVersion.prompt}</p>
             </Card>
           ))}
         </div>
@@ -438,7 +447,7 @@ export default async function ExamBuilderPage({
                   <Button type="submit" className="self-start">
                     Add selected to exam
                   </Button>
-                  <p className="text-xs text-slate-500">Each question is added at its own default points.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Each question is added at its own default points.</p>
                 </form>
               </Card>
             </Section>
@@ -448,7 +457,7 @@ export default async function ExamBuilderPage({
             <Card>
               {availableQuestions.length === 0 && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm text-slate-500">No questions in this course&apos;s bank yet.</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">No questions in this course&apos;s bank yet.</p>
                   <LinkButton href={`/courses/${exam.courseId}/questions`} variant="secondary" className="px-2.5 py-1 text-xs">
                     Go to question bank
                   </LinkButton>
@@ -487,7 +496,7 @@ export default async function ExamBuilderPage({
             <Button type="submit" variant="success">
               Publish exam
             </Button>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               Freezes this version — no more edits to it once published (Phase 1 has no re-versioning yet).
             </p>
           </form>
@@ -500,7 +509,7 @@ export default async function ExamBuilderPage({
             <Button type="submit" variant="danger">
               Delete exam
             </Button>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               Safe while still a draft — no student can have an attempt against an unpublished exam.
             </p>
           </form>
@@ -508,13 +517,13 @@ export default async function ExamBuilderPage({
       )}
 
       {canForceDelete && (
-        <Card className="border-red-300 bg-red-50">
-          <h2 className="mb-2 text-sm font-semibold text-red-900">Danger zone (admin only)</h2>
+        <Card className="border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950">
+          <h2 className="mb-2 text-sm font-semibold text-red-900 dark:text-red-300">Danger zone (admin only)</h2>
           <form action={deleteExamAction}>
             <Button type="submit" variant="danger">
               Force-delete this exam
             </Button>
-            <p className="mt-2 text-xs text-red-800">
+            <p className="mt-2 text-xs text-red-800 dark:text-red-300">
               This exam has already been published — deleting it also erases every student&apos;s attempt, answers,
               integrity events, and submission record against it. This cannot be undone. Only use this for cleaning up
               test/demo data, not a real academic record.
