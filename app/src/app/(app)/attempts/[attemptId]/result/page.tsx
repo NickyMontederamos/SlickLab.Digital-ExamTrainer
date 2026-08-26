@@ -60,6 +60,10 @@ export default async function AttemptResultPage({
 
       {expired === "1" && <Alert tone="warning">Time expired — this exam was auto-submitted.</Alert>}
 
+      {result.attempt.status !== "TERMINATED" && result.attempt.submission?.verifiedAt && (
+        <UploadConfirmation verifiedAt={result.attempt.submission.verifiedAt} />
+      )}
+
       {result.attempt.status === "TERMINATED" ? (
         <Alert tone="error">
           This attempt was terminated following an integrity review — a faculty member confirmed a violation after
@@ -93,6 +97,34 @@ export default async function AttemptResultPage({
         ))}
       </div>
     </main>
+  );
+}
+
+/**
+ * Mirrors the real app's own post-upload confirmation — a green checkmark
+ * plus a timestamp the student can point to (docs/EXAMPLIFY_ARCHITECTURE_REFERENCE.md,
+ * stage 7: "a green checkmark next to the exam name... confirm upload date
+ * and time"). `verifiedAt` is the proctor's "approve to finish" timestamp
+ * here rather than a raw upload timestamp, since this app's sync step is the
+ * proctor confirming the submission, not a network re-upload.
+ */
+function UploadConfirmation({ verifiedAt }: { verifiedAt: Date }) {
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(verifiedAt);
+
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+      <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+          <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.4 7.4a1 1 0 01-1.4 0L3.3 9.5a1 1 0 111.4-1.4l3.9 3.9 6.7-6.7a1 1 0 011.4 0z" clipRule="evenodd" />
+        </svg>
+      </span>
+      <span>
+        Submitted and confirmed <span className="text-emerald-600">·</span> {formatted}
+      </span>
+    </div>
   );
 }
 
