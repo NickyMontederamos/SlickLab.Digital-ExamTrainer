@@ -48,8 +48,11 @@ export default async function LoginPage({
         )}
       </div>
       <div className="text-center">
-        <h1 className="text-xl font-semibold text-slate-900">{branding?.name ?? "CM-Law SecureExam"}</h1>
-        <p className="text-sm text-slate-500">Secure Digital Examination Platform</p>
+        <h1 className="text-xl font-semibold text-slate-900">{branding?.name ?? "College of Maasin — College of Law"}</h1>
+        <p className="text-sm text-slate-500">Exam Readiness Trainer</p>
+        <p className="mt-1 text-xs font-medium text-amber-700">
+          Practice environment — not the official exam software.
+        </p>
       </div>
 
       <Card className="w-full max-w-sm">

@@ -2,7 +2,7 @@ import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import { getDemoInstitutionBranding } from "@/lib/branding";
 import { can } from "@/lib/rbac";
-import { Button } from "@/components/ui";
+import { Badge, Button } from "@/components/ui";
 
 /**
  * Institution branding + real navigation, shared by every authenticated
@@ -48,7 +48,13 @@ export async function AppHeader() {
             {branding?.logoUrl && (
               <Image src={branding.logoUrl} alt="College of Law crest" width={34} height={40} className="h-auto w-[34px]" />
             )}
-            <span className="text-sm font-semibold text-slate-900">{branding?.name ?? "CM-Law SecureExam"}</span>
+            <span className="text-sm font-semibold text-slate-900">
+              {branding?.name ?? "College of Maasin — College of Law"}
+            </span>
+            {/* Persistent, unmissable — this app deliberately mimics real secure-exam
+                interaction patterns (Milestone 8) and must never be mistaken for the
+                actual graded exam software on every page a student sees it on. */}
+            <Badge tone="amber">Practice</Badge>
           </a>
 
           {navLinks.length > 0 && (
