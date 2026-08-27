@@ -44,6 +44,13 @@ export async function AppHeader() {
       <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3">
         <div className="flex items-center gap-6">
           <a href="/dashboard" className="flex items-center gap-3">
+            <Image
+              src="/branding/securexam-logo.png"
+              alt="SecureExam"
+              width={32}
+              height={32}
+              className="h-auto w-8"
+            />
             {branding?.sealUrl && (
               <Image src={branding.sealUrl} alt="College of Maasin seal" width={40} height={40} className="rounded-full" />
             )}

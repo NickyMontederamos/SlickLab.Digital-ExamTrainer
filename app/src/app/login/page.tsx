@@ -40,6 +40,7 @@ export default async function LoginPage({
       style={brandStyle}
     >
       <div className="flex items-center justify-center gap-4">
+        <Image src="/branding/securexam-logo.png" alt="SecureExam" width={72} height={72} className="h-auto w-[72px] drop-shadow-sm" />
         {branding?.sealUrl && (
           <Image src={branding.sealUrl} alt="College of Maasin seal" width={72} height={72} className="drop-shadow-sm" />
         )}
