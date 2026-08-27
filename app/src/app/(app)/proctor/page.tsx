@@ -4,6 +4,7 @@ import { can } from "@/lib/rbac";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import {
   listBookedAttemptsForProctor,
+  listInProgressAttemptsForProctor,
   listPendingApprovalsForProctor,
   listPendingVerificationsForProctor,
 } from "@/lib/proctoring";
@@ -37,10 +38,11 @@ export default async function ProctorDashboardPage() {
 
   const institutionId = session.user.institutionId;
   const canCancel = can(session.user.role, "exam_attempt", "delete");
-  const [booked, pendingApprovals, pendingVerifications] = await Promise.all([
+  const [booked, pendingApprovals, pendingVerifications, inProgress] = await Promise.all([
     listBookedAttemptsForProctor(institutionId, session.user),
     listPendingApprovalsForProctor(institutionId, session.user),
     listPendingVerificationsForProctor(institutionId, session.user),
+    listInProgressAttemptsForProctor(institutionId, session.user),
   ]);
 
   return (
@@ -91,6 +93,38 @@ export default async function ProctorDashboardPage() {
                       </form>
                     )}
                   </span>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title={`Currently in progress (${inProgress.length})`}>
+        {inProgress.length === 0 ? (
+          <EmptyState>No exams underway right now.</EmptyState>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {inProgress.map((attempt) => (
+              <li key={attempt.id}>
+                <Card className="flex items-center justify-between text-sm">
+                  <span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{attempt.student.name}</span>
+                    <span className="text-slate-500 dark:text-slate-400"> — {attempt.examVersion.exam.title}</span>
+                    {attempt.status === "INTERRUPTED" && (
+                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">Paused for faculty review</span>
+                    )}
+                    {attempt.lastEventAt && (
+                      <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">Last signal {formatTime(attempt.lastEventAt)}</span>
+                    )}
+                  </span>
+                  <Badge tone={attempt.status === "INTERRUPTED" ? "red" : attempt.warningCount > 0 ? "amber" : "green"}>
+                    {attempt.status === "INTERRUPTED"
+                      ? "Paused"
+                      : attempt.warningCount > 0
+                        ? `${attempt.warningCount} warning${attempt.warningCount === 1 ? "" : "s"}`
+                        : "No warnings"}
+                  </Badge>
                 </Card>
               </li>
             ))}

@@ -2,6 +2,7 @@ import type { Role } from "@prisma/client";
 import { assertCan } from "./rbac";
 import { forTenant } from "./tenant-db";
 import { AttemptAlreadyFinishedError, AttemptNotFoundError, AttemptOwnershipError } from "./attempts";
+import { STRIKE_EVENT_TYPES } from "./integrity";
 import { AUDIT_ACTIONS, logAudit } from "./audit";
 
 /** A PROCTOR acting on an attempt outside every course they're assigned to via CourseProctor — see courses.ts's assignProctor. */
@@ -130,6 +131,48 @@ export async function listPendingApprovalsForProctor(institutionId: string, acto
     include: { student: true, examVersion: { include: { exam: true } } },
     orderBy: { proctorRequestedAt: "asc" },
   });
+}
+
+/**
+ * Attempts currently underway (or paused for integrity review) across this
+ * proctor's assigned courses — the "what's happening right now" overlay on
+ * the dashboard, surfacing the same WINDOW_BLUR/VISIBILITY_HIDDEN/
+ * FULLSCREEN_EXIT event trail that already drives the 3-strike auto-pause
+ * (see integrity.ts), which until now only FACULTY/INSTITUTION_ADMIN could
+ * see via the "grade" permission. Deliberately exam_attempt:"read" (which
+ * PROCTOR already holds) rather than "grade" — a proctor can watch the
+ * trail, but resolving a paused attempt (REINSTATE/FAIL) stays a FACULTY/
+ * ADMIN decision via resolveIntegrityReview, unchanged by this. Warning
+ * count is read fresh from the event log, same principle as
+ * integrity.ts's getWarningCount.
+ */
+export async function listInProgressAttemptsForProctor(institutionId: string, actor: { id: string; role: Role }) {
+  assertCan(actor.role, "exam_attempt", "read");
+
+  const db = forTenant(institutionId);
+  const courseIds = await scopedCourseIds(db, actor);
+  if (courseIds && courseIds.length === 0) {
+    return [];
+  }
+
+  const attempts = await db.examAttempt.findMany({
+    where: {
+      status: { in: ["IN_PROGRESS", "INTERRUPTED"] },
+      ...(courseIds ? { examVersion: { exam: { courseId: { in: courseIds } } } } : {}),
+    },
+    include: {
+      student: true,
+      examVersion: { include: { exam: true } },
+      events: { orderBy: { occurredAt: "desc" } },
+    },
+    orderBy: { startedAt: "asc" },
+  });
+
+  return attempts.map(({ events, ...attempt }) => ({
+    ...attempt,
+    warningCount: events.filter((e) => STRIKE_EVENT_TYPES.includes(e.type)).length,
+    lastEventAt: events[0]?.occurredAt ?? null,
+  }));
 }
 
 /**

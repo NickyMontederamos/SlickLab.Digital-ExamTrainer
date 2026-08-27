@@ -4,11 +4,13 @@ import { ForbiddenError } from "../rbac";
 import { createQuestion } from "../questions";
 import { addExamQuestion, createExam, publishExam } from "../exams";
 import { AttemptNotFoundError, beginBookedAttempt, bookAttempt, saveAnswers, submitAttempt } from "../attempts";
+import { recordAttemptEvent } from "../integrity";
 import {
   approveProctorStart,
   cancelAttempt,
   checkProctorApproval,
   listBookedAttemptsForProctor,
+  listInProgressAttemptsForProctor,
   listPendingApprovalsForProctor,
   listPendingVerificationsForProctor,
   ProctorNotAssignedError,
@@ -27,6 +29,7 @@ describe("proctoring (dashboard queues, approval gate, verification)", () => {
   let student: { id: string };
   let examId: string;
   let secondExamId: string;
+  let thirdExamId: string;
 
   beforeAll(async () => {
     const platform = forPlatform();
@@ -84,6 +87,18 @@ describe("proctoring (dashboard queues, approval gate, verification)", () => {
     secondExamId = secondExam.id;
     await addExamQuestion(institutionA.id, { id: faculty.id, role: "FACULTY" }, { examId: secondExamId, questionId: question.id, points: 1 });
     await publishExam(institutionA.id, { id: faculty.id, role: "FACULTY" }, secondExamId);
+
+    // A third, dedicated exam for the in-progress-overlay test below, so it
+    // doesn't collide with the attempts the approval-gate/verification tests
+    // already advance on examId/secondExamId.
+    const { exam: thirdExam } = await createExam(institutionA.id, { id: faculty.id, role: "FACULTY" }, {
+      courseId: courseA.id,
+      title: "Proctoring In-Progress Overlay Exam",
+      timeLimitMinutes: 30,
+    });
+    thirdExamId = thirdExam.id;
+    await addExamQuestion(institutionA.id, { id: faculty.id, role: "FACULTY" }, { examId: thirdExamId, questionId: question.id, points: 1 });
+    await publishExam(institutionA.id, { id: faculty.id, role: "FACULTY" }, thirdExamId);
   });
 
   afterAll(async () => {
@@ -168,6 +183,31 @@ describe("proctoring (dashboard queues, approval gate, verification)", () => {
     // A second call must not error and must not change the recorded time.
     const verifiedAgain = await verifySubmission(institutionA.id, { id: assignedProctor.id, role: "PROCTOR" }, booked.id);
     expect(verifiedAgain.verifiedAt?.getTime()).toBe(verified.verifiedAt?.getTime());
+  });
+
+  it("listInProgressAttemptsForProctor surfaces the live warning count, scoped by course assignment", async () => {
+    const booked = await bookAttempt(institutionA.id, { id: student.id, role: "STUDENT" }, thirdExamId);
+    await requestProctorApproval(institutionA.id, { id: student.id, role: "STUDENT" }, booked.id);
+    await approveProctorStart(institutionA.id, { id: assignedProctor.id, role: "PROCTOR" }, booked.id);
+    await beginBookedAttempt(institutionA.id, { id: student.id, role: "STUDENT" }, booked.id);
+
+    // Not underway yet as far as either proctor can tell — no events recorded.
+    const beforeEvents = await listInProgressAttemptsForProctor(institutionA.id, { id: assignedProctor.id, role: "PROCTOR" });
+    const beforeEntry = beforeEvents.find((a) => a.id === booked.id);
+    expect(beforeEntry?.warningCount).toBe(0);
+
+    await recordAttemptEvent(institutionA.id, { id: student.id, role: "STUDENT" }, booked.id, "WINDOW_BLUR");
+    await recordAttemptEvent(institutionA.id, { id: student.id, role: "STUDENT" }, booked.id, "NETWORK_OFFLINE");
+
+    const forAssigned = await listInProgressAttemptsForProctor(institutionA.id, { id: assignedProctor.id, role: "PROCTOR" });
+    const entry = forAssigned.find((a) => a.id === booked.id);
+    expect(entry).toBeDefined();
+    // Only the strike-worthy WINDOW_BLUR counts — the network event doesn't.
+    expect(entry?.warningCount).toBe(1);
+    expect(entry?.lastEventAt).not.toBeNull();
+
+    const forUnassigned = await listInProgressAttemptsForProctor(institutionA.id, { id: unassignedProctor.id, role: "PROCTOR" });
+    expect(forUnassigned.some((a) => a.id === booked.id)).toBe(false);
   });
 });
 
