@@ -65,12 +65,10 @@ export function DeviceAndIdentityCheck({ onComplete }: { onComplete: () => void 
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
 
         const audioCtx = new AudioContext();
         audioCtxRef.current = audioCtx;
+        await audioCtx.resume();
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 512;
@@ -106,6 +104,16 @@ export function DeviceAndIdentityCheck({ onComplete }: { onComplete: () => void 
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  // The <video> element only exists in the "device-check" and "capture"
+  // phases' own JSX — it isn't rendered yet when getUserMedia resolves
+  // (still "requesting" at that point), so attaching srcObject there is a
+  // no-op. This re-attaches it once a video element actually mounts.
+  useEffect(() => {
+    if (videoRef.current && streamRef.current && videoRef.current.srcObject !== streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [phase]);
 
   function stopMedia() {
     cancelAnimationFrame(rafRef.current);
