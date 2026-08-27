@@ -273,12 +273,21 @@ describe("exam builder (createExam / addExamQuestion / publishExam)", () => {
 
     const correctedDate = new Date("2026-09-01T00:00:00.000Z");
     const updated = await updatePostAssessmentSettings(institutionA.id, { id: facultyA.id, role: "FACULTY" }, exam.id, {
+      availableFrom: correctedDate,
       downloadStartAt: correctedDate,
     });
+    expect(updated.availableFrom?.toISOString()).toBe(correctedDate.toISOString());
     expect(updated.downloadStartAt?.toISOString()).toBe(correctedDate.toISOString());
+
+    // updateExam (core exam content) still refuses once published — availableFrom
+    // moved out of it specifically because it's scheduling, not content.
+    await expect(
+      updateExam(institutionA.id, { id: facultyA.id, role: "FACULTY" }, exam.id, { title: "Still Locked", timeLimitMinutes: 45 })
+    ).rejects.toThrow(ExamNotEditableError);
 
     const fetched = await getExam(institutionA.id, { id: facultyA.id, role: "FACULTY" }, exam.id);
     expect(fetched.versions[0].downloadStartAt?.toISOString()).toBe(correctedDate.toISOString());
+    expect(fetched.versions[0].availableFrom?.toISOString()).toBe(correctedDate.toISOString());
   });
 
   it("removes a question from a draft exam and renumbers the rest, but refuses once published", async () => {

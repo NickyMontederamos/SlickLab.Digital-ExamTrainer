@@ -305,8 +305,6 @@ export interface UpdateExamInput {
   title: string;
   timeLimitMinutes: number;
   instructions?: string;
-  availableFrom?: Date;
-  availableUntil?: Date;
   allowBacktracking?: boolean;
   calculatorAllowed?: boolean;
   spellCheckAllowed?: boolean;
@@ -344,8 +342,6 @@ export async function updateExam(institutionId: string, actor: { id: string; rol
       data: {
         timeLimitMinutes: input.timeLimitMinutes,
         instructions: input.instructions,
-        availableFrom: input.availableFrom ?? null,
-        availableUntil: input.availableUntil ?? null,
         allowBacktracking: input.allowBacktracking ?? activeVersion.allowBacktracking,
         calculatorAllowed: input.calculatorAllowed ?? activeVersion.calculatorAllowed,
         spellCheckAllowed: input.spellCheckAllowed ?? activeVersion.spellCheckAllowed,
@@ -362,6 +358,8 @@ export async function updateExam(institutionId: string, actor: { id: string; rol
 export interface UpdatePostAssessmentSettingsInput {
   assessmentPassword?: string;
   universalResumeCode?: string;
+  availableFrom?: Date;
+  availableUntil?: Date;
   downloadStartAt?: Date;
   downloadEndAt?: Date;
   maxDownloads?: number;
@@ -375,15 +373,18 @@ export interface UpdatePostAssessmentSettingsInput {
  * Post Assessment Settings — editable in DRAFT or PUBLISHED, unlike
  * updateExam/addExamQuestion (title/questions/time limit, still DRAFT-only:
  * exam *content* must never shift once students can see it). These fields
- * are logistics, not content — a download window, a password, a resume
- * code — the same category of thing the real reference product lets an
- * institution adjust on an already-posted exam. Locking them to DRAFT was
- * an earlier, deliberate call in this file's history; it turned out to
- * mean a wrong download-window date typed once could never be corrected
- * after publishing, with no way to even see the current value (the page's
- * edit form disappeared entirely) — an unrecoverable trap for exactly the
- * kind of mistake this setting exists to schedule. ARCHIVED is still
- * frozen, matching updateExam.
+ * are logistics, not content — a download window, an availability window,
+ * a password, a resume code — the same category of thing the real
+ * reference product lets an institution adjust on an already-posted exam.
+ * availableFrom/availableUntil live here rather than in updateExam() for
+ * the same reason: they gate *when* the exam can be reached, not *what's*
+ * in it, so they belong with the other schedule-only fields. Locking
+ * everything to DRAFT was an earlier, deliberate call in this file's
+ * history; it turned out to mean a wrong date typed once could never be
+ * corrected after publishing, with no way to even see the current value
+ * (the page's edit form disappeared entirely) — an unrecoverable trap for
+ * exactly the kind of mistake this setting exists to schedule. ARCHIVED is
+ * still frozen, matching updateExam.
  */
 export async function updatePostAssessmentSettings(
   institutionId: string,
@@ -416,6 +417,8 @@ export async function updatePostAssessmentSettings(
     data: {
       assessmentPassword: input.assessmentPassword ?? null,
       universalResumeCode: input.universalResumeCode ?? null,
+      availableFrom: input.availableFrom ?? null,
+      availableUntil: input.availableUntil ?? null,
       downloadStartAt: input.downloadStartAt ?? null,
       downloadEndAt: input.downloadEndAt ?? null,
       maxDownloads: input.maxDownloads ?? null,

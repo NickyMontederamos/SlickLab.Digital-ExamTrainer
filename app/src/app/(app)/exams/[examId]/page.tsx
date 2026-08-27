@@ -272,14 +272,10 @@ export default async function ExamBuilderPage({
 
     const title = String(formData.get("title") ?? "").trim();
     const timeLimitMinutes = Number(formData.get("timeLimitMinutes") ?? 60);
-    const availableFromRaw = String(formData.get("availableFrom") ?? "");
-    const availableUntilRaw = String(formData.get("availableUntil") ?? "");
 
     await updateExam(authSession.user.institutionId, authSession.user, examId, {
       title,
       timeLimitMinutes,
-      availableFrom: availableFromRaw ? new Date(availableFromRaw) : undefined,
-      availableUntil: availableUntilRaw ? new Date(availableUntilRaw) : undefined,
       allowBacktracking: formData.get("allowBacktracking") === "on",
       calculatorAllowed: formData.get("calculatorAllowed") === "on",
       spellCheckAllowed: formData.get("spellCheckAllowed") === "on",
@@ -403,6 +399,8 @@ export default async function ExamBuilderPage({
 
     const assessmentPassword = String(formData.get("assessmentPassword") ?? "").trim();
     const universalResumeCode = String(formData.get("universalResumeCode") ?? "").trim();
+    const availableFromRaw = String(formData.get("availableFrom") ?? "");
+    const availableUntilRaw = String(formData.get("availableUntil") ?? "");
     const downloadStartAtRaw = String(formData.get("downloadStartAt") ?? "");
     const downloadEndAtRaw = String(formData.get("downloadEndAt") ?? "");
     const maxDownloadsRaw = String(formData.get("maxDownloads") ?? "");
@@ -411,6 +409,8 @@ export default async function ExamBuilderPage({
     await updatePostAssessmentSettings(authSession.user.institutionId, authSession.user, examId, {
       assessmentPassword: assessmentPassword || undefined,
       universalResumeCode: universalResumeCode || undefined,
+      availableFrom: availableFromRaw ? new Date(availableFromRaw) : undefined,
+      availableUntil: availableUntilRaw ? new Date(availableUntilRaw) : undefined,
       downloadStartAt: downloadStartAtRaw ? new Date(downloadStartAtRaw) : undefined,
       downloadEndAt: downloadEndAtRaw ? new Date(downloadEndAtRaw) : undefined,
       maxDownloads: maxDownloadsRaw ? Number(maxDownloadsRaw) : undefined,
@@ -547,22 +547,10 @@ export default async function ExamBuilderPage({
                   className={inputClassName}
                 />
               </label>
-              <label className={labelClassName}>
-                Available from (optional)
-                <LocalDateTimeInput
-                  name="availableFrom"
-                  valueUtcIso={version.availableFrom ? version.availableFrom.toISOString() : undefined}
-                  className={inputClassName}
-                />
-              </label>
-              <label className={labelClassName}>
-                Available until (optional)
-                <LocalDateTimeInput
-                  name="availableUntil"
-                  valueUtcIso={version.availableUntil ? version.availableUntil.toISOString() : undefined}
-                  className={inputClassName}
-                />
-              </label>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Available from/until moved to Post Assessment Settings below, since they&apos;re scheduling, not
+                content, and stay editable after publishing.
+              </p>
 
               <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Exam Tools &amp; Security</h3>
@@ -665,6 +653,25 @@ export default async function ExamBuilderPage({
           <form action={updatePostSettingsAction} className="flex flex-col gap-5">
             <AssessmentPasswordField initialValue={version.assessmentPassword ?? ""} />
             <UniversalResumeCodeField initialValue={version.universalResumeCode ?? ""} />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={labelClassName}>
+                Available from (optional)
+                <LocalDateTimeInput
+                  name="availableFrom"
+                  valueUtcIso={version.availableFrom ? version.availableFrom.toISOString() : undefined}
+                  className={inputClassName}
+                />
+              </label>
+              <label className={labelClassName}>
+                Available until (optional)
+                <LocalDateTimeInput
+                  name="availableUntil"
+                  valueUtcIso={version.availableUntil ? version.availableUntil.toISOString() : undefined}
+                  className={inputClassName}
+                />
+              </label>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={labelClassName}>
