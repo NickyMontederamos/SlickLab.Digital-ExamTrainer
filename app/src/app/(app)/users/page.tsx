@@ -1,9 +1,11 @@
 import type { Role } from "@prisma/client";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { can } from "@/lib/rbac";
-import { createUser, EmailTakenError, listUsers, resetUserPassword, setUserActive } from "@/lib/users";
+import { EmailTakenError, inviteUser, listUsers, resetUserPassword, setUserActive } from "@/lib/users";
+import { createInviteToken } from "@/lib/account-tokens";
 import { Alert, Badge, Button, Card, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
 
 const ASSIGNABLE_ROLES: Role[] = ["INSTITUTION_ADMIN", "FACULTY", "PROCTOR", "STUDENT"];
@@ -11,7 +13,7 @@ const ASSIGNABLE_ROLES: Role[] = ["INSTITUTION_ADMIN", "FACULTY", "PROCTOR", "ST
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; invite?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id || !session.user.institutionId) {
@@ -21,11 +23,18 @@ export default async function UsersPage({
     redirect("/dashboard");
   }
 
-  const { error } = await searchParams;
+  const { error, invite } = await searchParams;
   const institutionId = session.user.institutionId;
   const users = await listUsers(institutionId, session.user);
 
-  async function createUserAction(formData: FormData) {
+  // Only ever set right after inviteUserAction's own redirect, from a raw
+  // token that exists nowhere else once this render finishes — the token
+  // hash is what's actually persisted (see account-tokens.ts). A page
+  // reload or a shared/bookmarked URL doesn't reveal anything: the token
+  // was already used or the link simply won't be here anymore.
+  const inviteUrl = invite ? `${(await headers()).get("x-forwarded-proto") ?? "https"}://${(await headers()).get("host")}/accept-invite/${invite}` : null;
+
+  async function inviteUserAction(formData: FormData) {
     "use server";
     const authSession = await auth();
     if (!authSession?.user?.institutionId) {
@@ -34,11 +43,12 @@ export default async function UsersPage({
 
     const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
-    const password = String(formData.get("password") ?? "");
     const role = String(formData.get("role") ?? "STUDENT") as Role;
 
+    let token: string;
     try {
-      await createUser(authSession.user.institutionId, authSession.user, { name, email, password, role });
+      const created = await inviteUser(authSession.user.institutionId, authSession.user, { name, email, role });
+      token = await createInviteToken(authSession.user.institutionId, authSession.user, created.id);
     } catch (err) {
       if (err instanceof EmailTakenError) {
         redirect(`/users?error=${encodeURIComponent(err.message)}`);
@@ -47,6 +57,7 @@ export default async function UsersPage({
     }
 
     revalidatePath("/users");
+    redirect(`/users?invite=${token}`);
   }
 
   async function toggleActiveAction(formData: FormData) {
@@ -122,14 +133,25 @@ export default async function UsersPage({
         </ul>
       </Section>
 
-      <Section title="Add a user">
+      <Section
+        title="Invite a user"
+        description="They set their own password — nobody here ever sees or types it for them."
+      >
         <Card>
           {error && (
             <div className="mb-3">
               <Alert tone="error">{error}</Alert>
             </div>
           )}
-          <form action={createUserAction} className="flex flex-col gap-3">
+          {inviteUrl && (
+            <div className="mb-3 flex flex-col gap-1.5">
+              <Alert tone="success">Account created. Send this one-time link to complete setup — it won&apos;t be shown again:</Alert>
+              <code className="break-all rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
+                {inviteUrl}
+              </code>
+            </div>
+          )}
+          <form action={inviteUserAction} className="flex flex-col gap-3">
             <label className={labelClassName}>
               Name
               <input name="name" required className={inputClassName} />
@@ -137,10 +159,6 @@ export default async function UsersPage({
             <label className={labelClassName}>
               Email
               <input name="email" type="email" required className={inputClassName} />
-            </label>
-            <label className={labelClassName}>
-              Password
-              <input name="password" type="password" required minLength={8} className={inputClassName} />
             </label>
             <label className={labelClassName}>
               Role
@@ -153,7 +171,7 @@ export default async function UsersPage({
               </select>
             </label>
             <Button type="submit" className="self-start">
-              Create user
+              Create invite
             </Button>
           </form>
         </Card>

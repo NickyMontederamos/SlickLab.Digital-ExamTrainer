@@ -79,6 +79,9 @@ export default async function LoginPage({
           <Button type="submit" className="mt-1 w-full">
             Sign in
           </Button>
+          <a href="/forgot-password" className="text-center text-sm text-slate-500 hover:text-brand-primary dark:text-slate-400">
+            Forgot password?
+          </a>
         </form>
       </Card>
 

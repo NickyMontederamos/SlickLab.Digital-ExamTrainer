@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { forPlatform } from "../tenant-db";
 import { AUDIT_ACTIONS } from "../audit";
-import { createUser, resetUserPassword, setUserActive } from "../users";
+import { createUser, inviteUser, resetUserPassword, setUserActive } from "../users";
+import { consumeAccountToken, createInviteToken, requestPasswordReset } from "../account-tokens";
 import { createQuestion } from "../questions";
 import { addExamQuestion, createExam, deleteExam, publishExam } from "../exams";
 import { startAttempt, submitAttempt } from "../attempts";
@@ -74,6 +75,7 @@ describe("A-05 regression: mutating actions write audit records", () => {
     await platform.question.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.enrollment.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.courseFaculty.deleteMany({ where: { institutionId: institutionA.id } });
+    await platform.accountToken.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.user.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.course.deleteMany({ where: { institutionId: institutionA.id } });
     await platform.institution.deleteMany({ where: { id: institutionA.id } });
@@ -259,5 +261,35 @@ describe("A-05 regression: mutating actions write audit records", () => {
     expect(revealed).not.toBeNull();
     const allRows = await forPlatform().auditLog.findMany({ where: { institutionId: institutionA.id } });
     expect(JSON.stringify(allRows)).not.toContain("tempPassword");
+  });
+
+  it("records invite issuance and acceptance, and password-reset request and completion", async () => {
+    const invited = await inviteUser(institutionA.id, { id: admin.id, role: "INSTITUTION_ADMIN" }, {
+      name: "Invited Person",
+      email: `aud-invite-${runId}@test.local`,
+      role: "STUDENT",
+    });
+    const inviteToken = await createInviteToken(institutionA.id, { id: admin.id, role: "INSTITUTION_ADMIN" }, invited.id);
+
+    const inviteRow = (await auditRowsFor(AUDIT_ACTIONS.userInvite)).find((r) => r.resourceId === invited.id);
+    expect(inviteRow?.actorUserId).toBe(admin.id);
+
+    await consumeAccountToken(inviteToken, "InvitedPersonPassword!2026");
+    const acceptedRow = (await auditRowsFor(AUDIT_ACTIONS.userInviteAccepted)).find((r) => r.resourceId === invited.id);
+    expect(acceptedRow).toBeDefined();
+
+    const resetToken = await requestPasswordReset(invited.email);
+    const requestedRow = (await auditRowsFor(AUDIT_ACTIONS.userPasswordResetRequested)).find((r) => r.resourceId === invited.id);
+    expect(requestedRow).toBeDefined();
+
+    await consumeAccountToken(resetToken!, "InvitedPersonNewPassword!2026");
+    const completedRow = (await auditRowsFor(AUDIT_ACTIONS.userPasswordResetCompleted)).find((r) => r.resourceId === invited.id);
+    expect(completedRow).toBeDefined();
+
+    // Neither the invite/reset flow's passwords may ever land in the audit log.
+    const allRows = await forPlatform().auditLog.findMany({ where: { institutionId: institutionA.id } });
+    const serialized = JSON.stringify(allRows);
+    expect(serialized).not.toContain("InvitedPersonPassword!2026");
+    expect(serialized).not.toContain("InvitedPersonNewPassword!2026");
   });
 });

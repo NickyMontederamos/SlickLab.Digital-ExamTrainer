@@ -1,40 +1,42 @@
+import { forPlatform } from "./tenant-db";
+
 /**
- * In-memory fixed-window rate limiter. Deliberately simple for Phase 1:
- * this is a single-instance deployment, so an in-memory Map is sufficient.
- * A multi-instance production deployment MUST replace this with a shared
- * store (Redis, etc.) — an in-memory limiter is per-process and does
- * nothing useful once there's more than one server instance behind a
- * load balancer. Documented here rather than silently left as a surprise.
+ * DB-backed fixed-window rate limiter, keyed per-email (see auth.ts's
+ * `login:${email}` key). Originally an in-memory Map — replaced because
+ * this app now runs on Vercel's serverless infrastructure, where each
+ * request can land on a different, ephemeral instance with its own
+ * process memory. An in-memory counter under that model doesn't actually
+ * limit anything: an attacker's requests get spread across instances that
+ * don't share state, so most attempts never see a full bucket. See
+ * docs/DISASTER_RECOVERY.md for the wider context this was found under.
+ *
+ * IP-based throttling (defense against spraying many accounts from one
+ * source) still isn't implemented — same scope note as before, unchanged
+ * by this rewrite.
  */
-
-interface Bucket {
-  count: number;
-  resetAt: number;
-}
-
-const buckets = new Map<string, Bucket>();
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
-export function checkRateLimit(key: string): { allowed: boolean; retryAfterSeconds?: number } {
-  const now = Date.now();
-  const bucket = buckets.get(key);
+export async function checkRateLimit(emailKey: string): Promise<{ allowed: boolean; retryAfterSeconds?: number }> {
+  const windowStart = new Date(Date.now() - WINDOW_MS);
 
-  if (!bucket || now > bucket.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    return { allowed: true };
+  const recentAttempts = await forPlatform().loginAttempt.findMany({
+    where: { emailKey, occurredAt: { gte: windowStart } },
+    orderBy: { occurredAt: "asc" },
+  });
+
+  if (recentAttempts.length >= MAX_ATTEMPTS) {
+    const oldest = recentAttempts[0];
+    const retryAfterSeconds = Math.max(0, Math.ceil((oldest.occurredAt.getTime() + WINDOW_MS - Date.now()) / 1000));
+    return { allowed: false, retryAfterSeconds };
   }
 
-  if (bucket.count >= MAX_ATTEMPTS) {
-    return { allowed: false, retryAfterSeconds: Math.ceil((bucket.resetAt - now) / 1000) };
-  }
-
-  bucket.count += 1;
+  await forPlatform().loginAttempt.create({ data: { emailKey } });
   return { allowed: true };
 }
 
 /** Call on a successful login so a legitimate user isn't punished by earlier failed attempts. */
-export function resetRateLimit(key: string): void {
-  buckets.delete(key);
+export async function resetRateLimit(emailKey: string): Promise<void> {
+  await forPlatform().loginAttempt.deleteMany({ where: { emailKey } });
 }

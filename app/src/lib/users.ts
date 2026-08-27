@@ -1,7 +1,7 @@
 import type { Role } from "@prisma/client";
 import { assertCan, ForbiddenError } from "./rbac";
 import { forPlatform, forTenant } from "./tenant-db";
-import { hashPassword } from "./password";
+import { hashPassword, generateTempPassword } from "./password";
 import { AUDIT_ACTIONS, logAudit } from "./audit";
 
 export class EmailTakenError extends Error {
@@ -58,6 +58,56 @@ export async function createUser(institutionId: string, actor: { id?: string; ro
     resourceId: created.id,
     result: "SUCCESS",
     metadata: { email: created.email, name: created.name, role: created.role },
+  });
+
+  return created;
+}
+
+export interface InviteUserInput {
+  name: string;
+  email: string;
+  role: Role;
+}
+
+/**
+ * Creates a user the same way createUser() does, except nobody — not even
+ * the admin creating the account — ever knows its password. A
+ * cryptographically random one is generated internally and immediately
+ * discarded from memory once hashed; it's stored only so the NOT NULL
+ * passwordHash column is satisfied, and it is unguessable and unusable
+ * until the invited person redeems an invite token (see
+ * account-tokens.ts's createInviteToken) and sets their own.
+ *
+ * Kept separate from createUser() rather than replacing it: createUser()
+ * still backs the roster CSV import path and existing tests/e2e specs,
+ * none of which are being changed here. This is the new path going
+ * forward for the one-by-one "Add a user" admin flow.
+ */
+export async function inviteUser(institutionId: string, actor: { id?: string; role: Role }, input: InviteUserInput) {
+  assertCan(actor.role, "user", "create");
+  if (!CREATABLE_ROLES.includes(input.role)) {
+    throw new ForbiddenError(actor.role, "user", "create");
+  }
+
+  const existing = await forPlatform().user.findUnique({ where: { email: input.email } });
+  if (existing) {
+    throw new EmailTakenError(input.email);
+  }
+
+  const passwordHash = await hashPassword(generateTempPassword(32));
+  const db = forTenant(institutionId);
+  const created = await db.user.create({
+    data: { email: input.email, name: input.name, role: input.role, passwordHash } as never,
+  });
+
+  await logAudit({
+    institutionId,
+    actorUserId: actor.id ?? null,
+    action: AUDIT_ACTIONS.userCreate,
+    resourceType: "user",
+    resourceId: created.id,
+    result: "SUCCESS",
+    metadata: { email: created.email, name: created.name, role: created.role, method: "invite" },
   });
 
   return created;

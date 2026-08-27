@@ -64,7 +64,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // spraying many accounts from one source — worth adding later,
         // not done here (see docs/PROJECT_STATUS.md).
         const rateLimitKey = `login:${email.toLowerCase()}`;
-        const rateLimit = checkRateLimit(rateLimitKey);
+        const rateLimit = await checkRateLimit(rateLimitKey);
         if (!rateLimit.allowed) {
           await logAudit({
             action: "auth.login",
@@ -101,7 +101,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        resetRateLimit(rateLimitKey);
+        await resetRateLimit(rateLimitKey);
 
         await logAudit({
           institutionId: user.institutionId,

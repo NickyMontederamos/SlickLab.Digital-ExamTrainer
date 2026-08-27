@@ -75,6 +75,20 @@ enum AuditResult {
   ERROR
 }
 
+enum AccountTokenType {
+  /// Set by inviteUser() when an admin creates an account with no
+  /// admin-known password — the invited person sets their own via this
+  /// token instead. See docs/ARCHITECTURE_DECISIONS.md on why: an admin
+  /// typing/distributing a real password (the old createUser() path,
+  /// still kept for tests/back-compat) means the admin has known every
+  /// student's password at least once, which is worth not doing.
+  INVITE
+  /// Self-service "forgot password" — requestPasswordReset() in
+  /// account-tokens.ts. Short-lived (1 hour) unlike INVITE's 7 days,
+  /// since a reset is meant to be used right away.
+  PASSWORD_RESET
+}
+
 /// A subscribing school/organization. Every tenant-scoped table carries
 /// institutionId; SUPER_ADMIN/PLATFORM_ADMIN users are the only ones allowed
 /// a null institutionId (they operate across tenants by design).
@@ -101,6 +115,7 @@ model Institution {
   examAttempts        ExamAttempt[]
   auditLogs           AuditLog[]
   deviceRegistrations DeviceRegistration[]
+  accountTokens       AccountToken[]
 }
 
 /// Institution -> Department -> Course. Nullable on Course rather than
@@ -157,6 +172,7 @@ model User {
   submissionsVerified Submission[]      @relation("SubmissionVerifiedBy")
   auditLogs           AuditLog[]
   deviceRegistrations DeviceRegistration[]
+  accountTokens       AccountToken[]
 
   @@index([institutionId])
 }
@@ -551,6 +567,46 @@ model AuditLog {
   @@index([institutionId])
   @@index([actorUserId])
   @@index([createdAt])
+}
+
+/// Single-use bearer tokens for invite-based account setup and self-service
+/// password reset — see src/lib/account-tokens.ts. Only tokenHash is ever
+/// stored (sha256 of the raw token); the raw token exists only in the
+/// generated URL, exactly once, at creation time. institutionId is
+/// denormalized from the user for forTenant() scoping on the admin-facing
+/// side (issuing an invite); redemption (consumeAccountToken) is
+/// necessarily unscoped via forPlatform() — the visitor has no session yet,
+/// same reasoning as auth.ts's login lookup.
+model AccountToken {
+  id            String           @id @default(cuid())
+  institutionId String?
+  institution   Institution?     @relation(fields: [institutionId], references: [id])
+  userId        String
+  user          User             @relation(fields: [userId], references: [id])
+  type          AccountTokenType
+  tokenHash     String           @unique
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([institutionId])
+  @@index([userId])
+}
+
+/// DB-backed replacement for rate-limit.ts's original in-memory bucket —
+/// see that file's own comment on why in-memory doesn't work once the app
+/// runs as multiple serverless instances (Vercel), which it now does.
+/// Append-only; a row per attempt, pruned implicitly by only ever querying
+/// the last WINDOW_MS — no separate cleanup job needed at Phase 1 volume.
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  /// Lowercased email being attempted — same key shape as the old
+  /// in-memory bucket's `login:${email}`. No institutionId: rate-limiting
+  /// must work before the tenant is known, exactly like login itself.
+  emailKey   String
+  occurredAt DateTime @default(now())
+
+  @@index([emailKey, occurredAt])
 }
 
 model DeviceRegistration {

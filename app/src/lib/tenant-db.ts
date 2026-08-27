@@ -19,6 +19,7 @@ const TENANT_SCOPED_MODELS = new Set([
   "ExamAttempt",
   "AuditLog",
   "DeviceRegistration",
+  "AccountToken",
 ]);
 
 // Operations where a tenant filter can be safely merged into `where`.

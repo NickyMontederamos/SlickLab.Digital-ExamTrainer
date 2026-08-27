@@ -47,6 +47,10 @@ export const AUDIT_ACTIONS = {
   userActivate: "user.activate",
   userDeactivate: "user.deactivate",
   userPasswordReset: "user.password_reset",
+  userInvite: "user.invite",
+  userInviteAccepted: "user.invite_accepted",
+  userPasswordResetRequested: "user.password_reset_requested",
+  userPasswordResetCompleted: "user.password_reset_completed",
 
   courseCreate: "course.create",
   courseUpdate: "course.update",
