@@ -449,7 +449,13 @@ export async function saveAnswers(
         create: { attemptId, examQuestionId: a.examQuestionId, isFlagged: a.isFlagged ?? false, ...responseData },
         update: { isFlagged: a.isFlagged ?? false, ...responseData },
       });
-    })
+    }),
+    // Prisma's default transaction timeout (5000ms) is tuned for a handful
+    // of upserts, not a full-exam autosave — a 50-question exam saving
+    // every answer in one batch measured well past it against Neon's
+    // per-query latency in production (P2028), the same failure mode
+    // question-import.ts and roster-import.ts hit at similar batch sizes.
+    { timeout: 45_000 }
   );
 }
 
@@ -568,7 +574,7 @@ async function finalizeAttempt(institutionId: string, attemptId: string) {
 
     const updated = await tx.examAttempt.findFirst({ where: { id: attemptId } });
     return updated!;
-  });
+  }, { timeout: 45_000 }); // see saveAnswers's identical timeout, above, for why — same per-question-sequential-write shape
 }
 
 /**

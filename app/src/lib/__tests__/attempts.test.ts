@@ -231,6 +231,52 @@ describe("exam attempts (start / save / submit / grade)", () => {
     const essayRow = result.breakdown.find((r) => r.maxPoints === 10);
     expect(essayRow?.pointsAwarded).toBe(10);
   });
+
+  // Regression test for a real production incident: a 50-question exam's
+  // autosave (saveAnswers) and submit (finalizeAttempt) each ran a
+  // per-question DB transaction that exceeded Prisma's default 5000ms
+  // interactive-transaction timeout against Neon's per-query latency
+  // (P2028), the same failure mode as the earlier CSV-import incident.
+  // Fixed with an explicit `timeout` on both $transaction calls.
+  it("saves and submits a 50-question exam in one batch without hitting the transaction timeout", async () => {
+    const { exam: bigExam } = await createExam(institutionA.id, { id: faculty.id, role: "FACULTY" }, {
+      courseId: courseA.id,
+      title: "Bulk Autosave Exam",
+      timeLimitMinutes: 60,
+    });
+    const examQuestionIds: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const { question } = await createQuestion(institutionA.id, { id: faculty.id, role: "FACULTY" }, {
+        courseId: courseA.id,
+        type: "MULTIPLE_CHOICE",
+        prompt: `Bulk question ${i + 1}`,
+        choices: [{ id: "0", text: "Right" }, { id: "1", text: "Wrong" }],
+        correctAnswer: { choiceIds: ["0"] },
+        points: 1,
+      });
+      const eq = await addExamQuestion(institutionA.id, { id: faculty.id, role: "FACULTY" }, { examId: bigExam.id, questionId: question.id, points: 1 });
+      examQuestionIds.push(eq.id);
+    }
+    await publishExam(institutionA.id, { id: faculty.id, role: "FACULTY" }, bigExam.id);
+
+    const attempt = await startAttempt(institutionA.id, { id: studentEnrolled.id, role: "STUDENT" }, bigExam.id);
+
+    await saveAnswers(
+      institutionA.id,
+      { id: studentEnrolled.id, role: "STUDENT" },
+      attempt.id,
+      examQuestionIds.map((examQuestionId) => ({ examQuestionId, responseJson: { choiceIds: ["0"] } }))
+    );
+
+    const view = await getAttemptForTaking(institutionA.id, { id: studentEnrolled.id, role: "STUDENT" }, attempt.id);
+    expect(view.answers).toHaveLength(50);
+
+    const submitted = await submitAttempt(institutionA.id, { id: studentEnrolled.id, role: "STUDENT" }, attempt.id);
+    expect(submitted.status).toBe("GRADED"); // all 50 objective, fully auto-graded
+
+    const result = await getAttemptResult(institutionA.id, { id: studentEnrolled.id, role: "STUDENT" }, attempt.id);
+    expect(result.scoredPoints).toBe(50);
+  });
 });
 
 describe("booking flow (bookAttempt / beginBookedAttempt)", () => {

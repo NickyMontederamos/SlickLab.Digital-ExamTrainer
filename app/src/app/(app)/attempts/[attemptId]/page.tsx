@@ -18,6 +18,11 @@ import {
   saveAnswers,
   submitAttempt,
 } from "@/lib/attempts";
+
+// Autosave and submit each run a per-question DB transaction — see
+// saveAnswers/finalizeAttempt's matching $transaction timeout for why a
+// large exam needs headroom past Vercel's default function duration.
+export const maxDuration = 60;
 import { getWarningCount, InvalidResumeCodeError, resumeAttemptWithCode } from "@/lib/integrity";
 import { seededShuffle } from "@/lib/shuffle";
 import { recordIntegrityEventAction } from "./actions";
