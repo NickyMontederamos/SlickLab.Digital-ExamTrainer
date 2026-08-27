@@ -372,10 +372,18 @@ export interface UpdatePostAssessmentSettingsInput {
 }
 
 /**
- * Post Assessment Settings — DRAFT-only, same editability rule as
- * updateExam/addExamQuestion. No unpublish/re-versioning in Phase 1, so
- * these settings are frozen forever alongside everything else once
- * published, rather than carving out a special post-publish exception.
+ * Post Assessment Settings — editable in DRAFT or PUBLISHED, unlike
+ * updateExam/addExamQuestion (title/questions/time limit, still DRAFT-only:
+ * exam *content* must never shift once students can see it). These fields
+ * are logistics, not content — a download window, a password, a resume
+ * code — the same category of thing the real reference product lets an
+ * institution adjust on an already-posted exam. Locking them to DRAFT was
+ * an earlier, deliberate call in this file's history; it turned out to
+ * mean a wrong download-window date typed once could never be corrected
+ * after publishing, with no way to even see the current value (the page's
+ * edit form disappeared entirely) — an unrecoverable trap for exactly the
+ * kind of mistake this setting exists to schedule. ARCHIVED is still
+ * frozen, matching updateExam.
  */
 export async function updatePostAssessmentSettings(
   institutionId: string,
@@ -395,7 +403,7 @@ export async function updatePostAssessmentSettings(
     throw new ExamNotFoundError(examId);
   }
   await assertFacultyAssignedToCourse(institutionId, actor, exam.courseId);
-  if (exam.status !== "DRAFT") {
+  if (exam.status === "ARCHIVED") {
     throw new ExamNotEditableError(examId);
   }
   const activeVersion = exam.versions[0];

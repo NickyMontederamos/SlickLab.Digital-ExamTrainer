@@ -19,6 +19,7 @@ import {
   QuestionNotFoundError,
   removeExamQuestion,
   updateExam,
+  updatePostAssessmentSettings,
 } from "../exams";
 
 describe("exam builder (createExam / addExamQuestion / publishExam)", () => {
@@ -248,6 +249,36 @@ describe("exam builder (createExam / addExamQuestion / publishExam)", () => {
     await expect(
       updateExam(institutionA.id, { id: facultyA.id, role: "FACULTY" }, exam.id, { title: "Too Late", timeLimitMinutes: 60 })
     ).rejects.toThrow(ExamNotEditableError);
+  });
+
+  // Regression test for a real production incident: an admin set a wrong
+  // download-window date (a separate timezone bug, since fixed), published
+  // the exam, and then had no way to correct it — updatePostAssessmentSettings
+  // was DRAFT-only, same as updateExam, so the entire settings form vanished
+  // once published. Unlike exam content (title/questions/time limit), these
+  // are logistics fields and should stay editable after publish.
+  it("allows updating Post Assessment Settings on a published exam, unlike core exam content", async () => {
+    const { exam } = await createExam(
+      institutionA.id,
+      { id: facultyA.id, role: "FACULTY" },
+      { courseId: courseA.id, title: "Post-Publish Settings Exam", timeLimitMinutes: 30 }
+    );
+    const { question } = await createQuestion(
+      institutionA.id,
+      { id: facultyA.id, role: "FACULTY" },
+      { courseId: courseA.id, type: "SHORT_ANSWER", prompt: "Needs at least one question to publish", points: 1 }
+    );
+    await addExamQuestion(institutionA.id, { id: facultyA.id, role: "FACULTY" }, { examId: exam.id, questionId: question.id, points: 1 });
+    await publishExam(institutionA.id, { id: facultyA.id, role: "FACULTY" }, exam.id);
+
+    const correctedDate = new Date("2026-09-01T00:00:00.000Z");
+    const updated = await updatePostAssessmentSettings(institutionA.id, { id: facultyA.id, role: "FACULTY" }, exam.id, {
+      downloadStartAt: correctedDate,
+    });
+    expect(updated.downloadStartAt?.toISOString()).toBe(correctedDate.toISOString());
+
+    const fetched = await getExam(institutionA.id, { id: facultyA.id, role: "FACULTY" }, exam.id);
+    expect(fetched.versions[0].downloadStartAt?.toISOString()).toBe(correctedDate.toISOString());
   });
 
   it("removes a question from a draft exam and renumbers the rest, but refuses once published", async () => {

@@ -68,8 +68,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined>
 export function ExamEntryGate({
   attemptId,
   examTitle,
-  windowLabel,
-  scheduledForLabel,
+  availableFromIso,
+  availableUntilIso,
+  scheduledForIso,
   confirmationCode,
   examMonitoringEnabled,
   beginAttemptAction,
@@ -78,14 +79,28 @@ export function ExamEntryGate({
 }: {
   attemptId: string;
   examTitle: string;
-  windowLabel: string | null;
-  scheduledForLabel: string | null;
+  availableFromIso: string | null;
+  availableUntilIso: string | null;
+  scheduledForIso: string | null;
   confirmationCode: string;
   examMonitoringEnabled: boolean;
   beginAttemptAction: (attemptId: string) => Promise<void>;
   requestProctorApprovalAction: (attemptId: string) => Promise<void>;
   checkProctorApprovalAction: (attemptId: string) => Promise<boolean>;
 }) {
+  // Formatted here (client-side) rather than passed in pre-formatted from the
+  // server, so the viewer's actual local timezone is used — see
+  // FormattedDateTime.tsx's identical reasoning for why this matters.
+  const dtFmt = { dateStyle: "medium", timeStyle: "short" } as const;
+  const scheduledForLabel = scheduledForIso ? new Date(scheduledForIso).toLocaleString(undefined, dtFmt) : null;
+  const windowLabel =
+    availableFromIso && availableUntilIso
+      ? `${new Date(availableFromIso).toLocaleString(undefined, dtFmt)} - ${new Date(availableUntilIso).toLocaleString(undefined, dtFmt)}`
+      : availableFromIso
+        ? `Opens ${new Date(availableFromIso).toLocaleString(undefined, dtFmt)}`
+        : availableUntilIso
+          ? `Closes ${new Date(availableUntilIso).toLocaleString(undefined, dtFmt)}`
+          : null;
   const router = useRouter();
   const [agreed, setAgreed] = useState(false);
   const [step, setStep] = useState<GateStep>("receipt");

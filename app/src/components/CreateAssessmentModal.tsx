@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal } from "./Modal";
+import { LocalDateTimeInput } from "./LocalDateTimeInput";
 import { Button, inputClassName, labelClassName } from "./ui";
 
 /** The reference template's "Create Assessment" floating window (PAGE TEMPLATE/Create and Post an Exam). */
@@ -58,11 +59,11 @@ export function CreateAssessmentModal({
           </label>
           <label className={labelClassName}>
             Available from (optional)
-            <input name="availableFrom" type="datetime-local" className={inputClassName} />
+            <LocalDateTimeInput name="availableFrom" className={inputClassName} />
           </label>
           <label className={labelClassName}>
             Available until (optional)
-            <input name="availableUntil" type="datetime-local" className={inputClassName} />
+            <LocalDateTimeInput name="availableUntil" className={inputClassName} />
           </label>
           <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>

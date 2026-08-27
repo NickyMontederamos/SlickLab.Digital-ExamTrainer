@@ -6,6 +6,8 @@ import { ExamEntryGate } from "@/components/ExamEntryGate";
 import { ExamDownloadGate } from "@/components/ExamDownloadGate";
 import { AssessmentPasswordField, UniversalResumeCodeField } from "@/components/PostAssessmentSettingsFields";
 import { DuplicateAssessmentModal } from "@/components/DuplicateAssessmentModal";
+import { LocalDateTimeInput } from "@/components/LocalDateTimeInput";
+import { FormattedDateTime } from "@/components/FormattedDateTime";
 import {
   addExamQuestion,
   addExamQuestions,
@@ -31,18 +33,25 @@ import {
 import { beginAttemptAction, checkProctorApprovalAction, requestProctorApprovalAction } from "./actions";
 import { Alert, Badge, Button, Card, EmptyState, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
 
-function formatWindow(from: Date | null, until: Date | null): string | null {
+/**
+ * Renders client-side (via FormattedDateTime) so the viewer's own timezone
+ * is used, not the server process's — see FormattedDateTime.tsx.
+ */
+function WindowLabel({ from, until }: { from: Date | null; until: Date | null }) {
   if (!from && !until) return null;
-  const fmt = (d: Date) => d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  if (from && until) return `${fmt(from)} – ${fmt(until)}`;
-  if (from) return `Opens ${fmt(from)}`;
-  return `Closes ${fmt(until!)}`;
-}
-
-/** `datetime-local` inputs need "YYYY-MM-DDTHH:mm" in the browser's local time, not an ISO string with a timezone. */
-function toDatetimeLocalValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (from && until) {
+    return (
+      <>
+        <FormattedDateTime iso={from.toISOString()} /> – <FormattedDateTime iso={until.toISOString()} />
+      </>
+    );
+  }
+  return (
+    <>
+      {from ? "Opens " : "Closes "}
+      <FormattedDateTime iso={(from ?? until)!.toISOString()} />
+    </>
+  );
 }
 
 // A large CSV import (importCsvIntoExamAction below) is a sequence of
@@ -87,11 +96,8 @@ export default async function ExamBuilderPage({
 
   if (session.user.role === "STUDENT") {
     const myAttempt = version ? await findAttemptForStudent(institutionId, session.user, version.id) : null;
-    const windowLabel = version ? formatWindow(version.availableFrom, version.availableUntil) : null;
     const hasWindow = Boolean(version?.availableFrom || version?.availableUntil);
-    const scheduledForLabel = myAttempt?.scheduledFor
-      ? myAttempt.scheduledFor.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-      : null;
+    const scheduledForIso = myAttempt?.scheduledFor ? myAttempt.scheduledFor.toISOString() : null;
 
     async function confirmBookingAction(formData: FormData) {
       "use server";
@@ -146,18 +152,24 @@ export default async function ExamBuilderPage({
           <Card className="flex flex-col gap-4">
             <div>
               <h2 className="mb-1 text-base font-semibold text-slate-900 dark:text-slate-100">Book This Exam</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Available: {windowLabel ?? "No fixed window — book anytime"}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Available:{" "}
+                {version && (version.availableFrom || version.availableUntil) ? (
+                  <WindowLabel from={version.availableFrom} until={version.availableUntil} />
+                ) : (
+                  "No fixed window, book anytime"
+                )}
+              </p>
             </div>
             <form action={confirmBookingAction} className="flex flex-col gap-3">
               {hasWindow && (
                 <label className={labelClassName}>
                   Pick a time within the window
-                  <input
+                  <LocalDateTimeInput
                     name="scheduledFor"
-                    type="datetime-local"
                     required
-                    min={version?.availableFrom ? toDatetimeLocalValue(version.availableFrom) : undefined}
-                    max={version?.availableUntil ? toDatetimeLocalValue(version.availableUntil) : undefined}
+                    minUtcIso={version?.availableFrom ? version.availableFrom.toISOString() : undefined}
+                    maxUtcIso={version?.availableUntil ? version.availableUntil.toISOString() : undefined}
                     className={inputClassName}
                   />
                 </label>
@@ -196,8 +208,9 @@ export default async function ExamBuilderPage({
             <ExamEntryGate
               attemptId={myAttempt.id}
               examTitle={exam.title}
-              windowLabel={windowLabel}
-              scheduledForLabel={scheduledForLabel}
+              availableFromIso={version?.availableFrom ? version.availableFrom.toISOString() : null}
+              availableUntilIso={version?.availableUntil ? version.availableUntil.toISOString() : null}
+              scheduledForIso={scheduledForIso}
               confirmationCode={myAttempt.id}
               examMonitoringEnabled={version?.examMonitoringEnabled ?? true}
               beginAttemptAction={beginAttemptAction}
@@ -222,6 +235,10 @@ export default async function ExamBuilderPage({
   }
 
   const canEdit = can(session.user.role, "exam", "update") && isDraft;
+  // Post Assessment Settings (download windows, password, resume code) are
+  // logistics, not exam content — editable in DRAFT or PUBLISHED, only
+  // locked once ARCHIVED. See updatePostAssessmentSettings's docstring.
+  const canEditPostSettings = can(session.user.role, "exam", "update") && exam.status !== "ARCHIVED";
   const canPublish = can(session.user.role, "exam", "publish") && isDraft;
   const canDelete = can(session.user.role, "exam", "delete") && isDraft;
   // Admin-only (exam_attempt:"delete" — rbac.ts): force-delete a PUBLISHED
@@ -532,19 +549,17 @@ export default async function ExamBuilderPage({
               </label>
               <label className={labelClassName}>
                 Available from (optional)
-                <input
+                <LocalDateTimeInput
                   name="availableFrom"
-                  type="datetime-local"
-                  defaultValue={version.availableFrom ? toDatetimeLocalValue(version.availableFrom) : undefined}
+                  valueUtcIso={version.availableFrom ? version.availableFrom.toISOString() : undefined}
                   className={inputClassName}
                 />
               </label>
               <label className={labelClassName}>
                 Available until (optional)
-                <input
+                <LocalDateTimeInput
                   name="availableUntil"
-                  type="datetime-local"
-                  defaultValue={version.availableUntil ? toDatetimeLocalValue(version.availableUntil) : undefined}
+                  valueUtcIso={version.availableUntil ? version.availableUntil.toISOString() : undefined}
                   className={inputClassName}
                 />
               </label>
@@ -589,10 +604,57 @@ export default async function ExamBuilderPage({
         </Section>
       )}
 
-      {canEdit && version && (
+      {!canEdit && version && can(session.user.role, "exam", "read") && (
+        <Section title="Exam details">
+          <Card>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+              <dt className="text-slate-500 dark:text-slate-400">Title</dt>
+              <dd className="text-slate-900 dark:text-slate-100">{exam.title}</dd>
+              <dt className="text-slate-500 dark:text-slate-400">Time limit</dt>
+              <dd className="text-slate-900 dark:text-slate-100">{version.timeLimitMinutes} minutes</dd>
+              <dt className="text-slate-500 dark:text-slate-400">Available from</dt>
+              <dd className="text-slate-900 dark:text-slate-100">
+                {version.availableFrom ? <FormattedDateTime iso={version.availableFrom.toISOString()} /> : "Not set"}
+              </dd>
+              <dt className="text-slate-500 dark:text-slate-400">Available until</dt>
+              <dd className="text-slate-900 dark:text-slate-100">
+                {version.availableUntil ? <FormattedDateTime iso={version.availableUntil.toISOString()} /> : "Not set"}
+              </dd>
+            </dl>
+
+            <div className="mt-4 flex flex-col gap-1.5 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Exam Tools &amp; Security</h3>
+              <p className="text-slate-700 dark:text-slate-300">Backward navigation: {version.allowBacktracking ? "Allowed" : "Not allowed"}</p>
+              <p className="text-slate-700 dark:text-slate-300">Calculator: {version.calculatorAllowed ? "Allowed" : "Not allowed"}</p>
+              <p className="text-slate-700 dark:text-slate-300">Spell check: {version.spellCheckAllowed ? "Allowed" : "Not allowed"}</p>
+              <p className="text-slate-700 dark:text-slate-300">Copy &amp; paste: {version.copyPasteAllowed ? "Allowed" : "Not allowed"}</p>
+              <p className="text-slate-700 dark:text-slate-300">Highlighting: {version.highlightingAllowed ? "Allowed" : "Not allowed"}</p>
+              <p className="text-slate-700 dark:text-slate-300">
+                ExamID &amp; ExamMonitor: {version.examMonitoringEnabled ? "Required" : "Not required"}
+              </p>
+            </div>
+
+            {isDraft ? null : (
+              <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                {exam.status === "PUBLISHED"
+                  ? "Locked once published, to keep exam content stable for anyone who's already seen it."
+                  : "This exam is archived and can no longer be changed."}
+              </p>
+            )}
+          </Card>
+        </Section>
+      )}
+
+      {canEditPostSettings && version && (
         <div className="flex flex-col gap-4">
           <div className="border-b-4 border-slate-200 pb-2 dark:border-slate-800">
             <h2 className="text-sm font-bold uppercase tracking-wide text-brand-primary">Post Assessment Settings</h2>
+            {!isDraft && (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                This exam is published. These logistics settings can still be changed; the title, questions, and time
+                limit above are locked in.
+              </p>
+            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Ping &amp; Release and the email reminder toggles are stored but inert — this app has no email
@@ -607,19 +669,17 @@ export default async function ExamBuilderPage({
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={labelClassName}>
                 Download Start
-                <input
+                <LocalDateTimeInput
                   name="downloadStartAt"
-                  type="datetime-local"
-                  defaultValue={version.downloadStartAt ? toDatetimeLocalValue(version.downloadStartAt) : undefined}
+                  valueUtcIso={version.downloadStartAt ? version.downloadStartAt.toISOString() : undefined}
                   className={inputClassName}
                 />
               </label>
               <label className={labelClassName}>
                 Download End
-                <input
+                <LocalDateTimeInput
                   name="downloadEndAt"
-                  type="datetime-local"
-                  defaultValue={version.downloadEndAt ? toDatetimeLocalValue(version.downloadEndAt) : undefined}
+                  valueUtcIso={version.downloadEndAt ? version.downloadEndAt.toISOString() : undefined}
                   className={inputClassName}
                 />
               </label>
@@ -639,10 +699,9 @@ export default async function ExamBuilderPage({
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={labelClassName}>
                 Remote Assessment Deletion (optional)
-                <input
+                <LocalDateTimeInput
                   name="remoteDeletionAt"
-                  type="datetime-local"
-                  defaultValue={version.remoteDeletionAt ? toDatetimeLocalValue(version.remoteDeletionAt) : undefined}
+                  valueUtcIso={version.remoteDeletionAt ? version.remoteDeletionAt.toISOString() : undefined}
                   className={inputClassName}
                 />
               </label>
