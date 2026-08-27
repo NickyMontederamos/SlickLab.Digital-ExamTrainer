@@ -19,6 +19,11 @@ import { consumeCreatedCredentials, importRosterFromCsv, RosterImportValidationE
 import { listUsers } from "@/lib/users";
 import { Alert, Button, Card, LinkButton, PageHeader, Section, inputClassName, labelClassName } from "@/components/ui";
 
+// A large roster CSV import is a sequence of per-row DB writes that can run
+// well past Vercel's default function duration — see roster-import.ts's
+// matching $transaction timeout for why.
+export const maxDuration = 60;
+
 /**
  * The faculty/proctor/student roster blocks are structurally identical
  * (a removable member list + an assign-from-dropdown form) — this was

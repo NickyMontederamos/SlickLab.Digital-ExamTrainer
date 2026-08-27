@@ -173,4 +173,31 @@ describe("importQuestionsFromCsv", () => {
     const after = await forPlatform().question.count({ where: { courseId: courseA.id } });
     expect(after).toBe(before); // the whole import was refused, not just the attach step
   });
+
+  // Regression test for a real production incident: a 50-question import
+  // (3 sequential writes/row = ~150 DB round trips) exceeded Prisma's
+  // default 5000ms interactive-transaction timeout against Neon's
+  // per-query latency, failing with P2028 even though every row was
+  // individually valid. Fixed by passing an explicit `timeout` to
+  // importQuestionsFromCsv's $transaction call. Local Postgres is fast
+  // enough that this won't reproduce the *timing* failure, but it does
+  // prove correctness at the scale that broke — a bank this size that
+  // completes with 50/50 rows landed is what matters here.
+  it("imports a 50-question bank in a single call without dropping any rows", async () => {
+    const rows: RowInput[] = Array.from({ length: 50 }, (_, i) => ({
+      type: "MULTIPLE_CHOICE",
+      prompt: `Bulk import question ${i + 1}`,
+      choice1: "A",
+      choice2: "B",
+      correct_choices: "1",
+      points: "1",
+    }));
+
+    const before = await forPlatform().question.count({ where: { courseId: courseA.id } });
+    const result = await importQuestionsFromCsv(institutionA.id, faculty, courseA.id, csv(...rows));
+    expect(result.imported).toBe(50);
+
+    const after = await forPlatform().question.count({ where: { courseId: courseA.id } });
+    expect(after - before).toBe(50);
+  });
 });

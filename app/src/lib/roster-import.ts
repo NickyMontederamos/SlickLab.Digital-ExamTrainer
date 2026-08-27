@@ -251,7 +251,7 @@ export async function importRosterFromCsv(
         studentsEnrolled++;
       }
     }
-  });
+  }, { timeout: 45_000 }); // see question-import.ts's identical timeout for why — same per-row-transaction shape, same fix
 
   // One audit row for the batch, listing the accounts created (emails and
   // roles only — never the generated passwords, which exist solely in the

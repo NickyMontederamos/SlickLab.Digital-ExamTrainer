@@ -176,44 +176,57 @@ export async function importQuestionsFromCsv(
     examVersionId = activeVersion.id;
   }
 
-  await db.$transaction(async (tx) => {
-    let order = examVersionId ? await tx.examQuestion.count({ where: { examVersionId } }) : 0;
+  await db.$transaction(
+    async (tx) => {
+      let order = examVersionId ? await tx.examQuestion.count({ where: { examVersionId } }) : 0;
 
-    for (const row of rows) {
-      const question = await tx.question.create({
-        data: {
-          courseId,
-          type: row.type,
-          difficulty: row.difficulty,
-          tags: row.tags,
-          learningObjectives: [],
-          createdById: actor.id,
-        } as never,
-      });
-      const version = await tx.questionVersion.create({
-        data: {
-          questionId: question.id,
-          versionNumber: 1,
-          prompt: row.prompt,
-          choices: row.choices,
-          correctAnswer: row.correctAnswer,
-          points: row.points,
-        },
-      });
-
-      if (examVersionId) {
-        await tx.examQuestion.create({
+      for (const row of rows) {
+        const question = await tx.question.create({
           data: {
-            examVersionId,
+            courseId,
+            type: row.type,
+            difficulty: row.difficulty,
+            tags: row.tags,
+            learningObjectives: [],
+            createdById: actor.id,
+          } as never,
+        });
+        const version = await tx.questionVersion.create({
+          data: {
             questionId: question.id,
-            questionVersionId: version.id,
-            order: order++,
+            versionNumber: 1,
+            prompt: row.prompt,
+            choices: row.choices,
+            correctAnswer: row.correctAnswer,
             points: row.points,
           },
         });
+
+        if (examVersionId) {
+          await tx.examQuestion.create({
+            data: {
+              examVersionId,
+              questionId: question.id,
+              questionVersionId: version.id,
+              order: order++,
+              points: row.points,
+            },
+          });
+        }
       }
-    }
-  });
+    },
+    // Each row is up to 3 sequential writes (question, questionVersion, and
+    // optionally examQuestion); Prisma's default interactive-transaction
+    // timeout is 5000ms, which a bank of even ~50 questions comfortably
+    // exceeds against Neon's per-query latency (observed: 50 questions took
+    // ~5.5s in production, just over the default). This is CSV import, not
+    // a request-latency-sensitive path, so a generous ceiling costs nothing
+    // — it only matters when genuinely needed. Kept under the calling
+    // routes' `maxDuration = 60` (see courses/[courseId]/questions/page.tsx
+    // and exams/[examId]/page.tsx) so Prisma's own timeout fires with a
+    // clear error before Vercel kills the function outright.
+    { timeout: 45_000 }
+  );
 
   return { imported: rows.length, attachedToExam: Boolean(examVersionId) };
 }

@@ -45,6 +45,11 @@ function toDatetimeLocalValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// A large CSV import (importCsvIntoExamAction below) is a sequence of
+// per-row DB writes that can run well past Vercel's default function
+// duration — see question-import.ts's matching $transaction timeout for why.
+export const maxDuration = 60;
+
 export default async function ExamBuilderPage({
   params,
   searchParams,

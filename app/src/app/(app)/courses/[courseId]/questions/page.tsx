@@ -10,6 +10,11 @@ import { Alert, Button, Card, EmptyState, LinkButton, PageHeader, Section, input
 
 const CHOICE_TYPES = new Set<QuestionType>(["MULTIPLE_CHOICE", "MULTIPLE_RESPONSE", "TRUE_FALSE"]);
 
+// A large CSV import (importCsvAction below) is a sequence of per-row DB
+// writes that can run well past Vercel's default function duration —
+// see question-import.ts's matching $transaction timeout for why.
+export const maxDuration = 60;
+
 /**
  * Parses the create-question form's plain-text "choices" textarea: one
  * choice per line, a leading "*" marks it correct. Deliberately simple for
